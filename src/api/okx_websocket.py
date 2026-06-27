@@ -8,9 +8,30 @@ import json
 import hmac
 import base64
 import hashlib
+import os
+import ssl
 from datetime import datetime
 from typing import Optional, Callable, Dict, Any
-import websockets
+
+# 尝试导入websockets，处理代理问题
+try:
+    import websockets
+    # 清除可能的代理环境变量，避免SOCKS代理问题
+    _proxy_vars = ['ALL_PROXY', 'all_proxy', 'ALL_PROXY', 'HTTP_PROXY', 'http_proxy', 'HTTPS_PROXY', 'https_proxy']
+    for var in _proxy_vars:
+        if var in os.environ:
+            del os.environ[var]
+    WEBSOCKETS_AVAILABLE = True
+except ImportError:
+    WEBSOCKETS_AVAILABLE = False
+    websockets = None
+
+# SSL证书上下文
+try:
+    import certifi
+    SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
+except ImportError:
+    SSL_CONTEXT = ssl.create_default_context()
 
 
 class OKXWebSocket:
@@ -86,6 +107,9 @@ class OKXWebSocket:
         Args:
             channel_type: 频道类型 (public/private/business)
         """
+        if not WEBSOCKETS_AVAILABLE:
+            raise ImportError("websockets module not available. Install with: pip install websockets")
+        
         if self.simulated:
             urls = {
                 "public": self.PUBLIC_URL_SIM,
@@ -102,7 +126,12 @@ class OKXWebSocket:
         url = urls.get(channel_type, self.PUBLIC_URL)
         
         try:
-            self.ws = await websockets.connect(url)
+            # 创建连接时使用SSL证书并禁用代理
+            self.ws = await websockets.connect(
+                url,
+                ssl=SSL_CONTEXT,
+                proxy=None
+            )
             self.connected = True
             print(f"[WebSocket] 已连接: {url}")
             

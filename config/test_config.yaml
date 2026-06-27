@@ -1,0 +1,15 @@
+log:
+  file: logs/trader.log
+  format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+  level: INFO
+okx:
+  api_key: your_api_key_here
+  passphrase: your_passphrase_here
+  secret_key: your_secret_key_here
+  simulated: true
+trading:
+  default_instId: BTC-USDT
+  max_daily_loss_pct: 0.03
+  max_position_pct: 0.2
+  max_single_loss_pct: 0.01
+  mode: simulated
