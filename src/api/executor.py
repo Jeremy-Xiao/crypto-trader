@@ -167,7 +167,7 @@ class TradingExecutor:
         self,
         instId: str,
         amount: float,
-        amount_type: str = "base"
+        amount_type: str = "quote"
     ) -> Dict:
         """
         市价买入
@@ -175,7 +175,7 @@ class TradingExecutor:
         Args:
             instId: 产品ID
             amount: 数量
-            amount_type: 数量类型 (base=币种, quote=计价币)
+            amount_type: 数量类型 (base=币种数量, quote=计价币金额)
         
         Returns:
             下单结果
@@ -191,17 +191,21 @@ class TradingExecutor:
         
         # 下单参数
         sz = str(amount)
-        tgtCcy = "base_ccy" if amount_type == "base" else "quote_ccy"
         
-        result = self.private_api.place_market_order(
-            instId=instId,
-            tdMode="cash",
-            side="buy",
-            sz=sz
-        )
+        # 市价单需要指定数量类型
+        body = {
+            "instId": instId,
+            "tdMode": "cash",
+            "side": "buy",
+            "ordType": "market",
+            "sz": sz,
+            "tgtCcy": "quote_ccy" if amount_type == "quote" else "base_ccy"
+        }
+        
+        result = self.private_api._request("POST", "/api/v5/trade/order", body=body)
         
         if result.get("code") == "0":
-            self.logger.info(f"市价买入成功: {instId} {amount}")
+            self.logger.info(f"市价买入成功: {instId} {amount} ({amount_type})")
         else:
             self.logger.error(f"市价买入失败: {result.get('msg')}")
         
