@@ -1,0 +1,15 @@
+# Crypto Trader Dependencies
+
+requests>=2.28.0
+websockets>=10.0
+python-dotenv>=1.0.0
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Optional: for advanced strategies
+scikit-learn>=1.2.0
+ta-lib>=0.4.0  # Technical Analysis Library
+
+# Testing
+pytest>=7.0.0
+pytest-asyncio>=0.20.0
