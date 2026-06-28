@@ -70,11 +70,14 @@ class DoubleMAStrategy(BaseStrategy):
         if len(prices) < period:
             return 0
         
+        # 使用最近的period条数据计算
+        recent_prices = prices[-(period+10):] if len(prices) > period+10 else prices
+        
         # 使用指数平滑
         k = 2 / (period + 1)
-        ema = prices[0]
+        ema = recent_prices[0]
         
-        for price in prices[1:]:
+        for price in recent_prices[1:]:
             ema = price * k + ema * (1 - k)
         
         return ema
@@ -90,7 +93,7 @@ class DoubleMAStrategy(BaseStrategy):
         Returns:
             交叉类型: "golden" / "death" / "none"
         """
-        if len(self.fast_ma_history) < 2:
+        if len(self.fast_ma_history) < 2 or fast_ma == 0 or slow_ma == 0:
             return "none"
         
         prev_fast = self.fast_ma_history[-1]
@@ -125,16 +128,37 @@ class DoubleMAStrategy(BaseStrategy):
         fast_period = self.params["fast_period"]
         slow_period = self.params["slow_period"]
         
-        # 计算均线
+        # 需要足够的数据
+        if len(self.price_history) < slow_period + 1:
+            return Signal(
+                signal_type=SignalType.HOLD,
+                instId=self.instId,
+                price=price,
+                amount=0,
+                timestamp=timestamp,
+                reason="数据不足"
+            )
+        
+        # 计算当前EMA
         fast_ma = self.calculate_ema(self.price_history, fast_period)
         slow_ma = self.calculate_ema(self.price_history, slow_period)
         
-        # 记录均线历史
+        # 记录EMA历史
         self.fast_ma_history.append(fast_ma)
         self.slow_ma_history.append(slow_ma)
         
-        # 检测交叉
-        cross = self.detect_cross(fast_ma, slow_ma)
+        # 检测交叉（需要之前的数据）
+        cross = "none"
+        if len(self.fast_ma_history) >= 2:
+            prev_fast = self.fast_ma_history[-2]
+            prev_slow = self.slow_ma_history[-2]
+            
+            # 金叉：快线从下方穿越慢线
+            if prev_fast <= prev_slow and fast_ma > slow_ma:
+                cross = "golden"
+            # 死叉：快线从上方穿越慢线
+            elif prev_fast >= prev_slow and fast_ma < slow_ma:
+                cross = "death"
         
         # 默认持有信号
         signal = Signal(
@@ -143,28 +167,32 @@ class DoubleMAStrategy(BaseStrategy):
             price=price,
             amount=0,
             timestamp=timestamp,
-            reason=f"fast_ma={fast_ma:.2f}, slow_ma={slow_ma:.2f}"
+            reason=f"EMA5={fast_ma:.0f}, EMA20={slow_ma:.0f}"
         )
         
         # 金叉买入
         if cross == "golden" and not self.position:
             signal.signal_type = SignalType.BUY
-            signal.reason = f"金叉买入: fast_ma({fast_ma:.2f}) > slow_ma({slow_ma:.2f})"
+            signal.amount = self.calculate_position_size(10000, price)  # 默认账户余额
+            signal.reason = f"金叉: EMA{fast_period}({fast_ma:.0f}) > EMA{slow_period}({slow_ma:.0f})"
         
         # 死叉卖出
         elif cross == "death" and self.position:
             signal.signal_type = SignalType.SELL
-            signal.reason = f"死叉卖出: fast_ma({fast_ma:.2f}) < slow_ma({slow_ma:.2f})"
+            signal.amount = self.position.amount
+            signal.reason = f"死叉: EMA{fast_period}({fast_ma:.0f}) < EMA{slow_period}({slow_ma:.0f})"
         
         # 止损
-        elif self.should_stop_loss(price):
+        elif self.position and self.should_stop_loss(price):
             signal.signal_type = SignalType.SELL
-            signal.reason = f"止损: 亏损{self.params['stop_loss_pct']*100}%"
+            signal.amount = self.position.amount
+            signal.reason = f"止损: -{self.params['stop_loss_pct']*100}%"
         
         # 止盈
-        elif self.should_take_profit(price):
+        elif self.position and self.should_take_profit(price):
             signal.signal_type = SignalType.SELL
-            signal.reason = f"止盈: 盈利{self.params['take_profit_pct']*100}%"
+            signal.amount = self.position.amount
+            signal.reason = f"止盈: +{self.params['take_profit_pct']*100}%"
         
         # 更新持仓价格
         if self.position:
