@@ -48,6 +48,9 @@ class AppConfig:
 class ConfigManager:
     """配置管理器"""
     
+    # 项目根目录
+    PROJECT_ROOT = Path(__file__).parent.parent.parent
+    
     def __init__(self, config_path: Optional[str] = None):
         """
         初始化配置管理器
@@ -61,15 +64,15 @@ class ConfigManager:
     def _find_config_file(self) -> Optional[str]:
         """查找配置文件"""
         possible_paths = [
-            "config/config.yaml",
-            "config/config.yml",
-            "config.yaml",
-            ".env"
+            self.PROJECT_ROOT / "config" / "config.yaml",
+            self.PROJECT_ROOT / "config" / "config.yml",
+            self.PROJECT_ROOT / "config.yaml",
+            self.PROJECT_ROOT / ".env"
         ]
         
         for path in possible_paths:
-            if os.path.exists(path):
-                return path
+            if path.exists():
+                return str(path)
         
         return None
     
@@ -148,6 +151,9 @@ class ConfigManager:
         Args:
             path: 保存路径
         """
+        # 使用项目根目录的绝对路径
+        full_path = self.PROJECT_ROOT / path if not os.path.isabs(path) else Path(path)
+        
         template = {
             'okx': {
                 'api_key': 'your_api_key_here',
@@ -170,12 +176,12 @@ class ConfigManager:
         }
         
         # 创建目录
-        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        full_path.parent.mkdir(parents=True, exist_ok=True)
         
-        with open(path, 'w') as f:
+        with open(full_path, 'w') as f:
             yaml.dump(template, f, default_flow_style=False)
         
-        print(f"配置模板已保存到: {path}")
+        print(f"配置模板已保存到: {full_path}")
     
     def validate(self) -> bool:
         """

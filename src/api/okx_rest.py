@@ -8,7 +8,7 @@ import hmac
 import base64
 import hashlib
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, List, Any
 from urllib.parse import urlencode
 
@@ -87,7 +87,7 @@ class OKXClient:
         Returns:
             请求头字典
         """
-        timestamp = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
+        timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
         sign = self._generate_signature(timestamp, method, request_path, body)
         
         headers = {
@@ -152,12 +152,13 @@ class OKXClient:
             return {"code": "-1", "msg": str(e), "data": []}
 
 
-class OKXPublicAPI(OKXClient):
+class OKXPublicAPI:
     """OKX 公共API（无需认证的行情接口）"""
+    
+    BASE_URL = "https://www.okx.com"
     
     def __init__(self):
         """公共API无需认证"""
-        super().__init__("", "", "")
     
     def _public_request(self, endpoint: str, params: Optional[Dict] = None) -> Dict:
         """公共请求（无需签名）"""

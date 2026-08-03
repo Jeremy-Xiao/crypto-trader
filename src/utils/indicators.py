@@ -5,7 +5,7 @@
 
 import pandas as pd
 import numpy as np
-from typing import Union
+from typing import Union, Dict
 
 
 def SMA(prices: Union[pd.Series, list], period: int) -> pd.Series:
@@ -218,6 +218,58 @@ def KDJ(
     j = 3 * k - 2 * d
     
     return {"k": k, "d": d, "j": j}
+
+
+def ADX(
+    high: Union[pd.Series, list],
+    low: Union[pd.Series, list],
+    close: Union[pd.Series, list],
+    period: int = 14
+) -> pd.Series:
+    """
+    平均方向指数 (Average Directional Index)
+    衡量趋势强度，不区分方向。
+    ADX > 25: 强趋势; ADX < 20: 无趋势/震荡
+
+    Args:
+        high: 最高价序列
+        low: 最低价序列
+        close: 收盘价序列
+        period: 计算周期
+
+    Returns:
+        ADX 序列
+    """
+    high = pd.Series(high)
+    low = pd.Series(low)
+    close = pd.Series(close)
+
+    # +DM / -DM
+    up_move = high.diff()
+    down_move = -low.diff()
+
+    plus_dm = pd.Series(0, index=high.index, dtype=float)
+    plus_dm[(up_move > down_move) & (up_move > 0)] = up_move[(up_move > down_move) & (up_move > 0)]
+
+    minus_dm = pd.Series(0, index=high.index, dtype=float)
+    minus_dm[(down_move > up_move) & (down_move > 0)] = down_move[(down_move > up_move) & (down_move > 0)]
+
+    # True Range
+    tr1 = high - low
+    tr2 = (high - close.shift(1)).abs()
+    tr3 = (low - close.shift(1)).abs()
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+
+    # Wilder smoothing (相当于 EMA with alpha=1/period)
+    atr = tr.ewm(alpha=1/period, adjust=False).mean()
+    plus_di = 100 * plus_dm.ewm(alpha=1/period, adjust=False).mean() / atr
+    minus_di = 100 * minus_dm.ewm(alpha=1/period, adjust=False).mean() / atr
+
+    # DX → ADX
+    dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di).replace(0, np.nan)
+    adx = dx.ewm(alpha=1/period, adjust=False).mean()
+
+    return adx
 
 
 def VolumeProfile(prices: list, volumes: list, bins: int = 20) -> Dict:

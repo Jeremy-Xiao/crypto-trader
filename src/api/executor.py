@@ -93,7 +93,7 @@ class TradingExecutor:
         balances = self.get_balance(ccy)
         
         for balance_data in balances:
-            for bal in balance_data.get("balData", []):
+            for bal in balance_data.get("details", []):
                 if bal.get("ccy") == ccy:
                     return float(bal.get("availBal", 0))
         

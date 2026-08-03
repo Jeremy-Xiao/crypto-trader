@@ -27,3 +27,12 @@ data/
 dist/
 build/
 *.egg-info/
+
+# OS / Editor
+.DS_Store
+
+# WorkBuddy
+.workbuddy/
+
+# Venv
+venv/

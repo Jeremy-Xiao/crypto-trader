@@ -1,260 +1,124 @@
 """
-双均线交叉策略
-经典的趋势跟随策略
+双均线交叉策略（趋势跟随）
+使用 src/utils/indicators.py 统一指标，支持趋势过滤。
 """
 
 from typing import Dict, Optional
 from .base import BaseStrategy, Signal, SignalType
+from src.utils.indicators import EMA
 
 
 class DoubleMAStrategy(BaseStrategy):
-    """双均线交叉策略"""
-    
+    """双均线交叉策略（趋势跟随，适用于 trending 市场）"""
+
+    applicable_regime = "trending"
+
     def __init__(
         self,
         instId: str,
         fast_period: int = 10,
         slow_period: int = 30,
-        position_pct: float = 0.02,
-        stop_loss_pct: float = 0.05,
-        take_profit_pct: float = 0.10,
+        trend_period: int = 60,
+        position_pct: float = 0.2,
+        risk_pct: float = 0.02,
+        atr_multiplier: float = 2.5,
+        atr_sl_multiplier: float = 2.5,
+        atr_tp_multiplier: float = 5.0,
         params: Optional[Dict] = None
     ):
-        """
-        初始化双均线策略
-        
-        Args:
-            instId: 交易产品ID
-            fast_period: 快线周期（短期均线）
-            slow_period: 慢线周期（长期均线）
-            position_pct: 仓位比例（账户权益的百分比）
-            stop_loss_pct: 止损百分比
-            take_profit_pct: 止盈百分比
-        """
-        # 合并参数
         all_params = {
             "fast_period": fast_period,
             "slow_period": slow_period,
+            "trend_period": trend_period,
             "position_pct": position_pct,
-            "stop_loss_pct": stop_loss_pct,
-            "take_profit_pct": take_profit_pct
+            "risk_pct": risk_pct,
+            "atr_multiplier": atr_multiplier,
+            "atr_sl_multiplier": atr_sl_multiplier,
+            "atr_tp_multiplier": atr_tp_multiplier,
         }
         if params:
             all_params.update(params)
-        
-        super().__init__(
-            name="DoubleMA",
-            instId=instId,
-            params=all_params
-        )
-        
-        # 历史数据缓存
-        self.price_history: list = []
+
+        super().__init__(name="DoubleMA", instId=instId, params=all_params)
+
         self.fast_ma_history: list = []
         self.slow_ma_history: list = []
-        
-        # 上一次信号
-        self.last_cross: str = "none"  # "golden" / "death" / "none"
-    
-    def calculate_ema(self, prices: list, period: int) -> float:
-        """
-        计算EMA
-        
-        Args:
-            prices: 价格列表
-            period: 周期
-        
-        Returns:
-            EMA值
-        """
-        if len(prices) < period:
-            return 0
-        
-        # 使用最近的period条数据计算
-        recent_prices = prices[-(period+10):] if len(prices) > period+10 else prices
-        
-        # 使用指数平滑
-        k = 2 / (period + 1)
-        ema = recent_prices[0]
-        
-        for price in recent_prices[1:]:
-            ema = price * k + ema * (1 - k)
-        
-        return ema
-    
-    def detect_cross(self, fast_ma: float, slow_ma: float) -> str:
-        """
-        检测交叉
-        
-        Args:
-            fast_ma: 快线值
-            slow_ma: 慢线值
-        
-        Returns:
-            交叉类型: "golden" / "death" / "none"
-        """
-        if len(self.fast_ma_history) < 2 or fast_ma == 0 or slow_ma == 0:
-            return "none"
-        
-        prev_fast = self.fast_ma_history[-1]
-        prev_slow = self.slow_ma_history[-1]
-        
-        # 金叉：快线从下方穿越慢线
-        if prev_fast <= prev_slow and fast_ma > slow_ma:
-            return "golden"
-        
-        # 死叉：快线从上方穿越慢线
-        if prev_fast >= prev_slow and fast_ma < slow_ma:
-            return "death"
-        
-        return "none"
-    
+
     def generate_signal(self, data: Dict) -> Signal:
-        """
-        生成交易信号
-        
-        Args:
-            data: 市场数据 {"price": float, "timestamp": str}
-        
-        Returns:
-            交易信号
-        """
         price = data.get("price", 0)
         timestamp = data.get("timestamp", "")
-        
-        # 记录价格
-        self.price_history.append(price)
-        
+
         fast_period = self.params["fast_period"]
         slow_period = self.params["slow_period"]
-        
-        # 需要足够的数据
+        trend_period = self.params["trend_period"]
+
         if len(self.price_history) < slow_period + 1:
-            return Signal(
-                signal_type=SignalType.HOLD,
-                instId=self.instId,
-                price=price,
-                amount=0,
-                timestamp=timestamp,
-                reason="数据不足"
-            )
-        
-        # 计算当前EMA
-        fast_ma = self.calculate_ema(self.price_history, fast_period)
-        slow_ma = self.calculate_ema(self.price_history, slow_period)
-        
-        # 记录EMA历史
+            return Signal(SignalType.HOLD, self.instId, price, 0, timestamp, "数据不足")
+
+        # 使用 src/utils/indicators.py 统一计算
+        prices = self.price_history
+        fast_ma = float(EMA(prices, fast_period).iloc[-1])
+        slow_ma = float(EMA(prices, slow_period).iloc[-1])
+
         self.fast_ma_history.append(fast_ma)
         self.slow_ma_history.append(slow_ma)
-        
-        # 检测交叉（需要之前的数据）
-        cross = "none"
-        if len(self.fast_ma_history) >= 2:
-            prev_fast = self.fast_ma_history[-2]
-            prev_slow = self.slow_ma_history[-2]
-            
-            # 金叉：快线从下方穿越慢线
-            if prev_fast <= prev_slow and fast_ma > slow_ma:
-                cross = "golden"
-            # 死叉：快线从上方穿越慢线
-            elif prev_fast >= prev_slow and fast_ma < slow_ma:
-                cross = "death"
-        
-        # 默认持有信号
-        signal = Signal(
-            signal_type=SignalType.HOLD,
-            instId=self.instId,
-            price=price,
-            amount=0,
-            timestamp=timestamp,
-            reason=f"EMA5={fast_ma:.0f}, EMA20={slow_ma:.0f}"
-        )
-        
-        # 金叉买入
-        if cross == "golden" and not self.position:
+
+        if len(self.fast_ma_history) < 2:
+            return Signal(SignalType.HOLD, self.instId, price, 0, timestamp,
+                          f"EMA{fast_period}={fast_ma:.0f}, EMA{slow_period}={slow_ma:.0f}")
+
+        prev_fast = self.fast_ma_history[-2]
+        prev_slow = self.slow_ma_history[-2]
+
+        # 金叉
+        golden_cross = prev_fast <= prev_slow and fast_ma > slow_ma
+        # 死叉
+        death_cross = prev_fast >= prev_slow and fast_ma < slow_ma
+
+        # 趋势过滤：价格需在趋势线上方才买入
+        in_uptrend = True
+        if len(prices) >= trend_period:
+            trend_ema = float(EMA(prices, trend_period).iloc[-1])
+            in_uptrend = price > trend_ema
+
+        signal = Signal(SignalType.HOLD, self.instId, price, 0, timestamp,
+                        f"EMA{fast_period}={fast_ma:.0f}, EMA{slow_period}={slow_ma:.0f}")
+
+        # 金叉买入（需趋势确认）
+        if golden_cross and not self.position and in_uptrend:
             signal.signal_type = SignalType.BUY
-            signal.amount = self.calculate_position_size(10000, price)  # 默认账户余额
+            signal.amount = self.calculate_position_size(self.account_balance, price)
             signal.reason = f"金叉: EMA{fast_period}({fast_ma:.0f}) > EMA{slow_period}({slow_ma:.0f})"
-        
+
         # 死叉卖出
-        elif cross == "death" and self.position:
+        elif death_cross and self.position:
             signal.signal_type = SignalType.SELL
             signal.amount = self.position.amount
             signal.reason = f"死叉: EMA{fast_period}({fast_ma:.0f}) < EMA{slow_period}({slow_ma:.0f})"
-        
-        # 止损
-        elif self.position and self.should_stop_loss(price):
+
+        # 趋势破位卖出
+        elif self.position and not in_uptrend and len(prices) >= trend_period:
             signal.signal_type = SignalType.SELL
             signal.amount = self.position.amount
-            signal.reason = f"止损: -{self.params['stop_loss_pct']*100}%"
-        
-        # 止盈
-        elif self.position and self.should_take_profit(price):
-            signal.signal_type = SignalType.SELL
-            signal.amount = self.position.amount
-            signal.reason = f"止盈: +{self.params['take_profit_pct']*100}%"
-        
+            signal.reason = "趋势破位: 价格跌破趋势线"
+
         # 更新持仓价格
         if self.position:
             self.position.update_price(price)
-        
-        self.last_cross = cross
-        
+
         return signal
-    
+
     def calculate_position_size(self, account_balance: float, price: float) -> float:
-        """
-        计算仓位大小
-        
-        Args:
-            account_balance: 账户余额
-            price: 当前价格
-        
-        Returns:
-            仓位大小（币种数量）
-        """
         position_pct = self.params["position_pct"]
-        
-        # 计算可用金额
-        available_amount = account_balance * position_pct
-        
-        # 计算币种数量
-        amount = available_amount / price
-        
-        return amount
-    
+        return (account_balance * position_pct) / price
+
     def describe(self) -> str:
-        """描述策略"""
         desc = super().describe()
         desc += "\n策略逻辑:\n"
         desc += f"  1. 金叉买入: EMA{self.params['fast_period']} 上穿 EMA{self.params['slow_period']}\n"
-        desc += f"  2. 死叉卖出: EMA{self.params['fast_period']} 下穿 EMA{self.params['slow_period']}\n"
-        desc += f"  3. 止损: {self.params['stop_loss_pct']*100}%\n"
-        desc += f"  4. 止盈: {self.params['take_profit_pct']*100}%\n"
-        desc += f"  5. 仓位: {self.params['position_pct']*100}%账户权益\n"
+        desc += f"  2. 趋势过滤: 价格需在 EMA{self.params['trend_period']} 上方\n"
+        desc += f"  3. 死叉卖出 / 趋势破位卖出\n"
+        desc += f"  4. ATR动态止损: {self.params['atr_sl_multiplier']}x ATR\n"
+        desc += f"  5. ATR动态止盈: {self.params['atr_tp_multiplier']}x ATR (盈亏比2:1)\n"
+        desc += f"  6. 移动止损: 盈利{self.params.get('risk_pct', 0.02)*100:.0f}%后激活\n"
         return desc
-
-
-# 使用示例
-if __name__ == "__main__":
-    strategy = DoubleMAStrategy(
-        instId="BTC-USDT",
-        fast_period=10,
-        slow_period=30,
-        position_pct=0.02,
-        stop_loss_pct=0.05,
-        take_profit_pct=0.10
-    )
-    
-    print(strategy.describe())
-    
-    # 模拟数据测试
-    prices = [40000, 40500, 41000, 40800, 41200, 41500, 42000, 41800, 42500]
-    
-    for i, price in enumerate(prices):
-        signal = strategy.generate_signal({
-            "price": price,
-            "timestamp": f"2024-01-01T{i}:00:00Z"
-        })
-        
-        print(f"价格{price}: {signal.signal_type.value} - {signal.reason}")

@@ -1,246 +1,359 @@
 """
 回测引擎
-模拟策略在历史数据上的表现
+支持 ATR 动态止盈止损、移动止损、市场状态自适应、手续费/滑点感知。
 """
 
 import pandas as pd
 import numpy as np
-from typing import Dict, List, Optional, Callable
+from typing import Dict, List, Optional
 from datetime import datetime
 from dataclasses import dataclass
 
-from src.strategies.base import BaseStrategy, Signal, SignalType, PositionSide
+from src.strategies.base import (
+    BaseStrategy, Signal, SignalType, PositionSide,
+    MarketRegime, detect_market_regime
+)
 
 
 @dataclass
 class BacktestConfig:
     """回测配置"""
-    initial_balance: float = 10000  # 初始资金
-    fee_rate: float = 0.001  # 手续费率（0.1%）
-    slippage: float = 0.0005  # 滑点（0.05%）
-    leverage: float = 1.0  # 杠杆倍数
+    initial_balance: float = 10000       # 初始资金
+    fee_rate: float = 0.001              # 手续费率（0.1%）
+    slippage: float = 0.0005             # 滑点（0.05%）
+    leverage: float = 1.0                # 杠杆倍数
 
+    # ATR 动态风控参数
+    use_atr_risk: bool = True            # 启用 ATR 动态风控
+    atr_period: int = 14                 # ATR 计算周期
+    risk_pct: float = 0.02               # 每笔交易风险占比（2%）
+    atr_multiplier: float = 2.0          # 仓位计算 ATR 倍数
+    atr_sl_multiplier: float = 2.0       # 止损 ATR 倍数
+    atr_tp_multiplier: float = 4.0       # 止盈 ATR 倍数（盈亏比 2:1）
 
-@dataclass
-class TradeRecord:
-    """交易记录"""
-    timestamp: str
-    instId: str
-    action: str  # "buy" / "sell"
-    price: float
-    amount: float
-    fee: float
-    pnl: float
-    reason: str
+    # 移动止损
+    use_trailing: bool = True            # 启用移动止损
+    trailing_pct: float = 0.02           # 盈利达到此比例后激活
+
+    # 多时间框架确认
+    use_mtf: bool = False                # 启用多时间框架确认
+    tf_confirm: Optional[list] = None    # 外部传入的 MTF 确认数组
+
+    # 市场状态自适应
+    use_regime: bool = True              # 启用市场状态检测
 
 
 class BacktestEngine:
-    """回测引擎"""
-    
+    """
+    回测引擎（ATR 动态风控 + 移动止损 + 市场状态自适应）
+
+    引擎层职责：
+    1. ATR 动态止损/止盈（覆盖策略层的固定止损止盈）
+    2. 移动止损（追踪最高价，止损线跟随上移）
+    3. 多时间框架确认（买入信号需通过高级别趋势确认）
+    4. 市场状态检测（用于策略适配和统计）
+    5. 手续费/滑点模拟
+    """
+
     def __init__(
         self,
         strategy: BaseStrategy,
         config: Optional[BacktestConfig] = None
     ):
-        """
-        初始化回测引擎
-        
-        Args:
-            strategy: 策略实例
-            config: 回测配置
-        """
         self.strategy = strategy
         self.config = config or BacktestConfig()
-        
+
         # 状态
         self.balance = self.config.initial_balance
-        self.trades: List[TradeRecord] = []
+        self.trades: List[Dict] = []
         self.equity_curve: List[Dict] = []
-        self.position_amount = 0
-        self.position_price = 0
-        
+        self.position_amount = 0.0
+        self.position_price = 0.0
+
+        # 统计
+        self.stop_stats = {
+            'stop_loss': 0, 'take_profit': 0,
+            'trailing_stop': 0, 'signal_sell': 0,
+            'fixed_sl': 0, 'fixed_tp': 0
+        }
+        self.mtf_blocked = 0
+        self.regime_history: List[str] = []
+
     def load_data(self, data: pd.DataFrame) -> None:
         """
         加载历史数据
-        
+
         Args:
             data: DataFrame with columns: timestamp, open, high, low, close, volume
         """
         self.data = data
-    
+
     def run(self) -> Dict:
-        """
-        运行回测
-        
-        Returns:
-            回测结果
-        """
+        """运行回测"""
         if self.data is None or len(self.data) == 0:
             return {"error": "无数据"}
-        
+
         print(f"开始回测: {self.strategy.name}")
         print(f"数据范围: {len(self.data)} 条")
-        
-        # 遍历每条数据
+        print(f"ATR风控: {'开启' if self.config.use_atr_risk else '关闭'} | "
+              f"移动止损: {'开启' if self.config.use_trailing else '关闭'} | "
+              f"MTF确认: {'开启' if self.config.use_mtf else '关闭'}")
+
         for idx, row in self.data.iterrows():
             timestamp = row.get("timestamp", row.get("ts", ""))
-            price = row["close"]  # 使用收盘价
-            
-            # 生成信号
+            price = float(row["close"])
+            high = float(row.get("high", price))
+            low = float(row.get("low", price))
+
+            # 更新策略的账户余额和历史数据
+            self.strategy.account_balance = self.balance
+            self.strategy.price_history.append(price)
+            self.strategy.high_history.append(high)
+            self.strategy.low_history.append(low)
+
+            # 市场状态检测（统计用）
+            if self.config.use_regime and len(self.strategy.price_history) >= 25:
+                regime, info = detect_market_regime(
+                    self.strategy.high_history,
+                    self.strategy.low_history,
+                    self.strategy.price_history
+                )
+                self.regime_history.append(regime.value)
+            else:
+                self.regime_history.append("unknown")
+
+            # ====== 引擎层：持仓时优先检查退出条件 ======
+            if self.position_amount > 0 and self.strategy.position:
+                exit_reason = self._check_exit_conditions(price, high, low, timestamp)
+
+                if exit_reason:
+                    self._execute_sell(price, timestamp, exit_reason)
+                    self._record_equity(price, timestamp)
+                    continue
+
+            # ====== 策略层：生成信号 ======
             signal = self.strategy.generate_signal({
                 "price": price,
+                "high": high,
+                "low": low,
                 "timestamp": timestamp
             })
-            
+
             # 执行交易
-            if signal.signal_type == SignalType.BUY:
+            if signal.signal_type == SignalType.BUY and self.position_amount == 0:
+                # 多时间框架确认
+                if self.config.use_mtf and self.config.tf_confirm:
+                    data_idx = len(self.strategy.price_history) - 1
+                    if data_idx < len(self.config.tf_confirm):
+                        if not self.config.tf_confirm[data_idx]:
+                            self.mtf_blocked += 1
+                            self._record_equity(price, timestamp)
+                            continue
+
                 self._execute_buy(price, signal.amount, timestamp, signal.reason)
-            
-            elif signal.signal_type == SignalType.SELL:
-                self._execute_sell(price, timestamp, signal.reason)
-            
-            # 记录权益曲线
-            equity = self._calculate_equity(price)
-            self.equity_curve.append({
-                "timestamp": timestamp,
-                "equity": equity,
-                "balance": self.balance,
-                "position_value": self.position_amount * price,
-                "price": price
-            })
-        
+
+            elif signal.signal_type == SignalType.SELL and self.position_amount > 0:
+                self._execute_sell(price, timestamp, signal.reason or "signal_sell")
+                self.stop_stats['signal_sell'] += 1
+
+            self._record_equity(price, timestamp)
+
+        # 强制平仓
+        if self.position_amount > 0:
+            last_row = self.data.iloc[-1]
+            last_price = float(last_row["close"])
+            last_ts = last_row.get("timestamp", last_row.get("ts", ""))
+            self._execute_sell(last_price, last_ts, "end_of_backtest")
+
         # 计算绩效
         results = self._calculate_performance()
-        
+
         print(f"\n回测完成!")
         print(f"总收益: {results['total_return']:.2f}%")
         print(f"最大回撤: {results['max_drawdown']:.2f}%")
         print(f"夏普比率: {results['sharpe_ratio']:.2f}")
         print(f"胜率: {results['win_rate']:.2f}%")
-        
+        print(f"总交易: {results['total_trades']} | 盈利: {results['winning_trades']}")
+        if sum(self.stop_stats.values()) > 0:
+            ss = self.stop_stats
+            total = sum(ss.values())
+            print(f"退出方式: 止盈{ss['take_profit']}({ss['take_profit']/total*100:.0f}%) | "
+                  f"止损{ss['stop_loss']}({ss['stop_loss']/total*100:.0f}%) | "
+                  f"移动止损{ss['trailing_stop']}({ss['trailing_stop']/total*100:.0f}%) | "
+                  f"信号卖出{ss['signal_sell']}({ss['signal_sell']/total*100:.0f}%)")
+        if self.mtf_blocked > 0:
+            print(f"MTF拦截: {self.mtf_blocked}次")
+
         return results
-    
+
+    def _check_exit_conditions(self, price: float, high: float, low: float, timestamp: str) -> Optional[str]:
+        """
+        检查退出条件（引擎层优先于策略层）
+
+        优先级：
+        1. ATR 动态止损/止盈（如果启用）
+        2. 移动止损（如果启用）
+        3. 固定止损/止盈（兼容旧策略）
+        """
+        if self.config.use_atr_risk:
+            atr_val = self.strategy.get_atr(self.config.atr_period)
+
+            if atr_val > 0:
+                # 更新持仓价格
+                self.strategy.position.update_price(price)
+
+                # 移动止损
+                if self.config.use_trailing:
+                    trailing_reason = self.strategy.update_trailing_stop(
+                        price, atr_val,
+                        self.config.atr_sl_multiplier,
+                        self.config.trailing_pct
+                    )
+                    if trailing_reason:
+                        self.stop_stats['trailing_stop'] += 1
+                        return trailing_reason
+
+                # ATR 止损
+                stop_price = self.strategy.position.entry_price - atr_val * self.config.atr_sl_multiplier
+                if price <= stop_price:
+                    self.stop_stats['stop_loss'] += 1
+                    return 'stop_loss'
+
+                # ATR 止盈
+                tp_price = self.strategy.position.entry_price + atr_val * self.config.atr_tp_multiplier
+                if price >= tp_price:
+                    self.stop_stats['take_profit'] += 1
+                    return 'take_profit'
+
+                return None  # ATR 风控启用但未触发
+
+        # 固定止损止盈（兼容旧逻辑）
+        if self.strategy.should_stop_loss(price):
+            self.stop_stats['fixed_sl'] += 1
+            return 'fixed_stop_loss'
+        if self.strategy.should_take_profit(price):
+            self.stop_stats['fixed_tp'] += 1
+            return 'fixed_take_profit'
+
+        return None
+
     def _execute_buy(self, price: float, amount: float, timestamp: str, reason: str):
         """执行买入"""
         if self.position_amount > 0:
-            return  # 已有持仓
-        
-        # 计算实际买入金额
-        buy_value = min(amount * price, self.balance)
-        actual_amount = buy_value / price
-        
-        # 计算手续费
-        fee = buy_value * self.config.fee_rate
-        
-        # 计算滑点
+            return
+
         actual_price = price * (1 + self.config.slippage)
-        
-        # 更新状态
+
+        # ATR 动态仓位
+        if self.config.use_atr_risk:
+            atr_val = self.strategy.get_atr(self.config.atr_period)
+            if atr_val > 0:
+                amount = self.strategy.calculate_atr_position_size(
+                    self.balance, actual_price, atr_val,
+                    risk_pct=self.config.risk_pct,
+                    atr_multiplier=self.config.atr_multiplier,
+                    max_pct=0.5
+                )
+
+        buy_value = min(amount * actual_price, self.balance)
+        actual_amount = buy_value / actual_price
+        fee = buy_value * self.config.fee_rate
+
         self.balance -= (buy_value + fee)
         self.position_amount = actual_amount
         self.position_price = actual_price
-        
-        # 开仓
+
         self.strategy.open_position(actual_price, actual_amount, timestamp)
-        
-        # 记录交易
-        self.trades.append(TradeRecord(
-            timestamp=timestamp,
-            instId=self.strategy.instId,
-            action="buy",
-            price=actual_price,
-            amount=actual_amount,
-            fee=fee,
-            pnl=0,
-            reason=reason
-        ))
-    
+
+        self.trades.append({
+            "timestamp": timestamp,
+            "instId": self.strategy.instId,
+            "action": "buy",
+            "price": actual_price,
+            "amount": actual_amount,
+            "fee": fee,
+            "pnl": 0,
+            "reason": reason
+        })
+
     def _execute_sell(self, price: float, timestamp: str, reason: str):
         """执行卖出"""
         if self.position_amount <= 0:
-            return  # 无持仓
-        
-        # 计算滑点
+            return
+
         actual_price = price * (1 - self.config.slippage)
-        
-        # 计算卖出金额
         sell_value = self.position_amount * actual_price
-        
-        # 计算手续费
         fee = sell_value * self.config.fee_rate
-        
-        # 计算盈亏
         pnl = (actual_price - self.position_price) * self.position_amount
-        
-        # 更新状态
+
         self.balance += (sell_value - fee)
-        
-        # 平仓
+
         self.strategy.close_position(actual_price, timestamp, reason)
-        
-        # 记录交易
-        self.trades.append(TradeRecord(
-            timestamp=timestamp,
-            instId=self.strategy.instId,
-            action="sell",
-            price=actual_price,
-            amount=self.position_amount,
-            fee=fee,
-            pnl=pnl,
-            reason=reason
-        ))
-        
-        # 清空持仓
-        self.position_amount = 0
-        self.position_price = 0
-    
-    def _calculate_equity(self, current_price: float) -> float:
-        """计算总权益"""
-        position_value = self.position_amount * current_price
-        return self.balance + position_value
-    
+
+        self.trades.append({
+            "timestamp": timestamp,
+            "instId": self.strategy.instId,
+            "action": "sell",
+            "price": actual_price,
+            "amount": self.position_amount,
+            "fee": fee,
+            "pnl": pnl,
+            "reason": reason
+        })
+
+        self.position_amount = 0.0
+        self.position_price = 0.0
+
+    def _record_equity(self, price: float, timestamp: str):
+        """记录权益曲线"""
+        equity = self.balance + self.position_amount * price
+        self.equity_curve.append({
+            "timestamp": timestamp,
+            "equity": equity,
+            "balance": self.balance,
+            "position_value": self.position_amount * price,
+            "price": price
+        })
+
     def _calculate_performance(self) -> Dict:
         """计算绩效指标"""
         if not self.equity_curve:
             return {}
-        
+
         equity_series = pd.Series([e["equity"] for e in self.equity_curve])
-        
-        # 总收益率
+
         total_return = (equity_series.iloc[-1] - equity_series.iloc[0]) / equity_series.iloc[0] * 100
-        
-        # 最大回撤
+
         peak = equity_series.cummax()
         drawdown = (equity_series - peak) / peak
         max_drawdown = drawdown.min() * 100
-        
-        # 收益率序列
+
         returns = equity_series.pct_change().dropna()
-        
-        # 夏普比率（假设无风险利率为0）
-        sharpe_ratio = returns.mean() / returns.std() * np.sqrt(252) if returns.std() > 0 else 0
-        
-        # 交易统计
-        sell_trades = [t for t in self.trades if t.action == "sell"]
-        winning_trades = [t for t in sell_trades if t.pnl > 0]
-        
+        sharpe_ratio = returns.mean() / returns.std() * np.sqrt(365) if returns.std() > 0 else 0
+
+        sell_trades = [t for t in self.trades if t["action"] == "sell"]
+        winning_trades = [t for t in sell_trades if t["pnl"] > 0]
         total_trades = len(sell_trades)
         win_rate = len(winning_trades) / total_trades * 100 if total_trades > 0 else 0
-        
-        # 盈亏比
-        if winning_trades and len([t for t in sell_trades if t.pnl < 0]) > 0:
-            avg_win = np.mean([t.pnl for t in winning_trades])
-            avg_loss = np.mean([abs(t.pnl) for t in sell_trades if t.pnl < 0])
-            profit_ratio = avg_win / avg_loss
+
+        if winning_trades and len([t for t in sell_trades if t["pnl"] < 0]) > 0:
+            avg_win = np.mean([t["pnl"] for t in winning_trades])
+            avg_loss = np.mean([abs(t["pnl"]) for t in sell_trades if t["pnl"] < 0])
+            profit_ratio = avg_win / avg_loss if avg_loss > 0 else 0
         else:
             profit_ratio = 0
-        
-        # 总盈亏
-        total_pnl = sum([t.pnl for t in self.trades])
-        
+
+        total_pnl = sum([t["pnl"] for t in self.trades])
+
+        # 市场状态统计
+        regime_stats = {}
+        if self.regime_history:
+            for r in self.regime_history:
+                regime_stats[r] = regime_stats.get(r, 0) + 1
+
         return {
             "initial_balance": self.config.initial_balance,
-            "final_equity": equity_series.iloc[-1],
+            "final_equity": float(equity_series.iloc[-1]),
             "total_return": total_return,
             "max_drawdown": max_drawdown,
             "sharpe_ratio": sharpe_ratio,
@@ -249,49 +362,23 @@ class BacktestEngine:
             "win_rate": win_rate,
             "profit_ratio": profit_ratio,
             "total_pnl": total_pnl,
-            "total_fee": sum([t.fee for t in self.trades])
+            "total_fee": sum([t["fee"] for t in self.trades]),
+            "stop_stats": self.stop_stats,
+            "mtf_blocked": self.mtf_blocked,
+            "regime_stats": regime_stats
         }
-    
+
     def get_equity_curve_df(self) -> pd.DataFrame:
-        """获取权益曲线DataFrame"""
         return pd.DataFrame(self.equity_curve)
-    
+
     def get_trades_df(self) -> pd.DataFrame:
-        """获取交易记录DataFrame"""
         return pd.DataFrame([{
-            "timestamp": t.timestamp,
-            "instId": t.instId,
-            "action": t.action,
-            "price": t.price,
-            "amount": t.amount,
-            "fee": t.fee,
-            "pnl": t.pnl,
-            "reason": t.reason
+            "timestamp": t["timestamp"],
+            "instId": t["instId"],
+            "action": t["action"],
+            "price": t["price"],
+            "amount": t["amount"],
+            "fee": t["fee"],
+            "pnl": t["pnl"],
+            "reason": t["reason"]
         } for t in self.trades])
-
-
-# 使用示例
-if __name__ == "__main__":
-    from src.strategies.double_ma import DoubleMAStrategy
-    
-    # 创建策略
-    strategy = DoubleMAStrategy(
-        instId="BTC-USDT",
-        fast_period=10,
-        slow_period=30,
-        position_pct=0.1,
-        stop_loss_pct=0.05,
-        take_profit_pct=0.10
-    )
-    
-    # 创建回测引擎
-    engine = BacktestEngine(
-        strategy=strategy,
-        config=BacktestConfig(
-            initial_balance=10000,
-            fee_rate=0.001,
-            slippage=0.0005
-        )
-    )
-    
-    print(strategy.describe())

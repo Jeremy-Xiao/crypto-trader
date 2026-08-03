@@ -1,12 +1,16 @@
 """
 策略基类
-定义策略的基本结构和接口
+定义策略的基本结构和接口，支持 ATR 动态风控、移动止损、市场状态自适应。
 """
 
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, List
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
+import pandas as pd
+import numpy as np
+
+from src.utils.indicators import ATR, ADX
 
 
 class SignalType(Enum):
@@ -23,6 +27,13 @@ class PositionSide(Enum):
     NONE = "none"
 
 
+class MarketRegime(Enum):
+    """市场状态"""
+    TRENDING = "trending"
+    RANGING = "ranging"
+    UNKNOWN = "unknown"
+
+
 @dataclass
 class Signal:
     """交易信号"""
@@ -32,7 +43,7 @@ class Signal:
     amount: float
     timestamp: str
     reason: str = ""
-    
+
     def to_dict(self) -> Dict:
         return {
             "signal": self.signal_type.value,
@@ -46,7 +57,7 @@ class Signal:
 
 @dataclass
 class Position:
-    """持仓信息"""
+    """持仓信息（支持移动止损）"""
     instId: str
     side: PositionSide
     amount: float
@@ -54,7 +65,11 @@ class Position:
     current_price: float
     unrealized_pnl: float
     unrealized_pnl_pct: float
-    
+    # 移动止损相关
+    highest_price: float = 0.0
+    trailing_active: bool = False
+    trailing_stop: float = 0.0
+
     def update_price(self, current_price: float):
         """更新当前价格和盈亏"""
         self.current_price = current_price
@@ -64,7 +79,7 @@ class Position:
         elif self.side == PositionSide.SHORT:
             self.unrealized_pnl = (self.entry_price - current_price) * self.amount
             self.unrealized_pnl_pct = (self.entry_price - current_price) / self.entry_price * 100
-    
+
     def to_dict(self) -> Dict:
         return {
             "instId": self.instId,
@@ -73,132 +88,291 @@ class Position:
             "entry_price": self.entry_price,
             "current_price": self.current_price,
             "unrealized_pnl": self.unrealized_pnl,
-            "unrealized_pnl_pct": self.unrealized_pnl_pct
+            "unrealized_pnl_pct": self.unrealized_pnl_pct,
+            "highest_price": self.highest_price,
+            "trailing_active": self.trailing_active,
+            "trailing_stop": self.trailing_stop
         }
 
 
+def detect_market_regime(
+    highs: list,
+    lows: list,
+    closes: list,
+    adx_period: int = 14,
+    lookback: int = 50
+) -> tuple:
+    """
+    检测市场状态：trending（趋势）/ ranging（震荡）
+
+    综合两个指标：
+    1. ADX > 25 → 趋势市；ADX < 20 → 震荡市；20-25 → 中性
+    2. 波动率分位数：近期波动率在历史中的位置，辅助判断
+
+    Returns:
+        (MarketRegime, {'adx': float, 'vol_pct': float})
+    """
+    n = len(closes)
+    if n < adx_period + 5 or not highs or not lows:
+        return MarketRegime.UNKNOWN, {'adx': 0, 'vol_pct': 0.5}
+
+    # ADX
+    adx_series = ADX(highs, lows, closes, adx_period)
+    adx_val = float(adx_series.iloc[-1]) if not pd.isna(adx_series.iloc[-1]) else 0
+
+    # 波动率分位数
+    returns = pd.Series(closes).pct_change().dropna()
+    recent_vol = returns.iloc[-20:].std() if len(returns) >= 20 else returns.std()
+    if len(returns) >= lookback:
+        hist_vols = [returns.iloc[i:i+20].std() for i in range(len(returns) - 20)
+                     if not pd.isna(returns.iloc[i:i+20].std())]
+        if hist_vols:
+            vol_pct = sum(1 for v in hist_vols if v <= recent_vol) / len(hist_vols)
+        else:
+            vol_pct = 0.5
+    else:
+        vol_pct = 0.5
+
+    # 综合判断
+    if adx_val >= 25:
+        regime = MarketRegime.TRENDING
+    elif adx_val <= 20:
+        regime = MarketRegime.RANGING
+    else:
+        regime = MarketRegime.TRENDING if vol_pct > 0.6 else MarketRegime.RANGING
+
+    return regime, {'adx': round(adx_val, 2), 'vol_pct': round(vol_pct, 3)}
+
+
 class BaseStrategy(ABC):
-    """策略基类"""
-    
+    """
+    策略基类（支持 ATR 动态风控 + 移动止损 + 市场状态自适应）
+
+    子类需要实现：
+    - generate_signal(): 根据市场数据生成买卖信号
+    - calculate_position_size(): 计算仓位大小
+
+    引擎层负责：
+    - ATR 动态止损/止盈
+    - 移动止损
+    - 多时间框架确认
+    """
+
+    # 策略适用的市场状态，子类可覆盖
+    applicable_regime: str = "both"  # "trending" / "ranging" / "both"
+
     def __init__(
         self,
         name: str,
         instId: str,
         params: Optional[Dict] = None
     ):
-        """
-        初始化策略
-        
-        Args:
-            name: 策略名称
-            instId: 交易产品ID
-            params: 策略参数
-        """
         self.name = name
         self.instId = instId
         self.params = params or {}
-        
+
         # 状态
         self.position: Optional[Position] = None
         self.signals: List[Signal] = []
         self.trades: List[Dict] = []
-        
+        self.account_balance: float = 10000  # 由回测引擎更新
+
+        # 历史数据缓存
+        self.price_history: list = []
+        self.high_history: list = []
+        self.low_history: list = []
+
     @abstractmethod
     def generate_signal(self, data: Dict) -> Signal:
         """
         生成交易信号
-        
+
         Args:
-            data: 市场数据
-        
+            data: 市场数据 {"price": float, "timestamp": str, "high": float, "low": float}
+
         Returns:
             交易信号
         """
         pass
-    
+
     @abstractmethod
     def calculate_position_size(self, account_balance: float, price: float) -> float:
+        """计算仓位大小"""
+        pass
+
+    # ====== ATR 动态风控（由引擎调用） ======
+
+    def get_atr(self, period: int = 14) -> float:
+        """获取当前 ATR 值"""
+        if len(self.high_history) < period + 1 or len(self.low_history) < period + 1:
+            return 0.0
+        atr_series = ATR(
+            pd.Series(self.high_history),
+            pd.Series(self.low_history),
+            pd.Series(self.price_history),
+            period
+        )
+        val = atr_series.iloc[-1]
+        return float(val) if not pd.isna(val) else 0.0
+
+    def calculate_atr_position_size(
+        self,
+        account_balance: float,
+        price: float,
+        atr_val: float,
+        risk_pct: float = 0.02,
+        atr_multiplier: float = 2.0,
+        max_pct: float = 0.5
+    ) -> float:
         """
-        计算仓位大小
-        
+        ATR 动态仓位计算
+
+        仓位 = (balance × risk_pct) / (ATR × atr_multiplier)
+        波动大 → ATR大 → 仓位小；波动小 → 仓位大
+
         Args:
             account_balance: 账户余额
             price: 当前价格
-        
+            atr_val: ATR 值
+            risk_pct: 每笔交易风险占比（如 0.02 = 2%）
+            atr_multiplier: ATR 倍数作为止损距离
+            max_pct: 单笔仓位上限（占账户比例）
+
         Returns:
-            仓位大小
+            仓位大小（币种数量）
         """
-        pass
-    
+        if atr_val <= 0 or price <= 0:
+            pct = self.params.get("position_pct", 0.2)
+            return (account_balance * pct) / price
+
+        risk_amount = account_balance * risk_pct
+        stop_distance = atr_val * atr_multiplier
+        amount = risk_amount / stop_distance
+
+        # 单笔仓位上限
+        max_amount = account_balance * max_pct / price
+        amount = min(amount, max_amount)
+
+        return amount
+
+    def check_atr_stop_loss(self, atr_val: float, atr_sl_multiplier: float = 2.0) -> bool:
+        """ATR 动态止损检查"""
+        if not self.position or atr_val <= 0:
+            return False
+
+        stop_price = self.position.entry_price - atr_val * atr_sl_multiplier
+        return self.position.current_price <= stop_price
+
+    def check_atr_take_profit(self, atr_val: float, atr_tp_multiplier: float = 4.0) -> bool:
+        """ATR 动态止盈检查"""
+        if not self.position or atr_val <= 0:
+            return False
+
+        tp_price = self.position.entry_price + atr_val * atr_tp_multiplier
+        return self.position.current_price >= tp_price
+
+    def update_trailing_stop(
+        self,
+        current_price: float,
+        atr_val: float,
+        atr_sl_multiplier: float = 2.0,
+        trailing_pct: float = 0.02
+    ) -> Optional[str]:
+        """
+        更新移动止损，返回触发原因或 None
+
+        逻辑：
+        1. 盈利达到 trailing_pct 后激活移动止损
+        2. 激活后，止损线 = 最高价 - ATR × atr_sl_multiplier
+        3. 止损线只上移不下移
+
+        Returns:
+            'trailing_stop' 如果触发移动止损，否则 None
+        """
+        if not self.position or atr_val <= 0:
+            return None
+
+        pos = self.position
+        pos.highest_price = max(pos.highest_price, current_price)
+
+        # 激活移动止损
+        if not pos.trailing_active:
+            if current_price >= pos.entry_price * (1 + trailing_pct):
+                pos.trailing_active = True
+                pos.trailing_stop = pos.highest_price - atr_val * atr_sl_multiplier
+
+        # 已激活，持续更新
+        if pos.trailing_active:
+            new_trail = pos.highest_price - atr_val * atr_sl_multiplier
+            pos.trailing_stop = max(pos.trailing_stop, new_trail)
+
+            if current_price <= pos.trailing_stop:
+                return 'trailing_stop'
+
+        return None
+
+    # ====== 基础风控（兼容旧策略） ======
+
     def should_stop_loss(self, current_price: float) -> bool:
-        """
-        是否止损
-        
-        Args:
-            current_price: 当前价格
-        
-        Returns:
-            是否止损
-        """
+        """固定百分比止损（兼容旧逻辑）"""
         if not self.position:
             return False
-        
-        stop_loss_pct = self.params.get("stop_loss_pct", 0.05)  # 默认5%止损
-        
+        stop_loss_pct = self.params.get("stop_loss_pct", 0.05)
         if self.position.side == PositionSide.LONG:
             loss_pct = (self.position.entry_price - current_price) / self.position.entry_price
             return loss_pct >= stop_loss_pct
-        
+        elif self.position.side == PositionSide.SHORT:
+            loss_pct = (current_price - self.position.entry_price) / self.position.entry_price
+            return loss_pct >= stop_loss_pct
         return False
-    
+
     def should_take_profit(self, current_price: float) -> bool:
-        """
-        是否止盈
-        
-        Args:
-            current_price: 当前价格
-        
-        Returns:
-            是否止盈
-        """
+        """固定百分比止盈（兼容旧逻辑）"""
         if not self.position:
             return False
-        
-        take_profit_pct = self.params.get("take_profit_pct", 0.10)  # 默认10%止盈
-        
+        take_profit_pct = self.params.get("take_profit_pct", 0.10)
         if self.position.side == PositionSide.LONG:
             profit_pct = (current_price - self.position.entry_price) / self.position.entry_price
             return profit_pct >= take_profit_pct
-        
+        elif self.position.side == PositionSide.SHORT:
+            profit_pct = (self.position.entry_price - current_price) / self.position.entry_price
+            return profit_pct >= take_profit_pct
         return False
-    
-    def open_position(self, price: float, amount: float, timestamp: str):
+
+    # ====== 仓位管理 ======
+
+    def open_position(self, price: float, amount: float, timestamp: str, side: PositionSide = PositionSide.LONG):
         """开仓"""
         self.position = Position(
             instId=self.instId,
-            side=PositionSide.LONG,
+            side=side,
             amount=amount,
             entry_price=price,
             current_price=price,
             unrealized_pnl=0,
-            unrealized_pnl_pct=0
+            unrealized_pnl_pct=0,
+            highest_price=price,
+            trailing_active=False,
+            trailing_stop=0.0
         )
-        
         self.trades.append({
             "action": "open",
-            "side": "buy",
+            "side": "buy" if side == PositionSide.LONG else "sell",
             "price": price,
             "amount": amount,
             "timestamp": timestamp
         })
-    
+
     def close_position(self, price: float, timestamp: str, reason: str = ""):
         """平仓"""
         if not self.position:
             return
-        
-        realized_pnl = (price - self.position.entry_price) * self.position.amount
-        
+
+        if self.position.side == PositionSide.LONG:
+            realized_pnl = (price - self.position.entry_price) * self.position.amount
+        else:
+            realized_pnl = (self.position.entry_price - price) * self.position.amount
+
         self.trades.append({
             "action": "close",
             "side": "sell",
@@ -208,21 +382,16 @@ class BaseStrategy(ABC):
             "reason": reason,
             "timestamp": timestamp
         })
-        
         self.position = None
-    
+
     def get_performance_stats(self) -> Dict:
         """获取策略绩效"""
         if not self.trades:
             return {}
-        
         total_trades = len([t for t in self.trades if t["action"] == "close"])
         winning_trades = len([t for t in self.trades if t.get("realized_pnl", 0) > 0])
-        
         total_pnl = sum([t.get("realized_pnl", 0) for t in self.trades])
-        
         win_rate = winning_trades / total_trades if total_trades > 0 else 0
-        
         return {
             "total_trades": total_trades,
             "winning_trades": winning_trades,
@@ -230,10 +399,11 @@ class BaseStrategy(ABC):
             "total_pnl": total_pnl,
             "current_position": self.position.to_dict() if self.position else None
         }
-    
+
     def describe(self) -> str:
         """描述策略"""
         desc = f"策略名称: {self.name}\n"
         desc += f"交易产品: {self.instId}\n"
+        desc += f"适用市场: {self.applicable_regime}\n"
         desc += f"参数: {self.params}\n"
         return desc

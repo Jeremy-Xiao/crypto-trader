@@ -13,14 +13,9 @@ import ssl
 from datetime import datetime
 from typing import Optional, Callable, Dict, Any
 
-# 尝试导入websockets，处理代理问题
+# 尝试导入websockets
 try:
     import websockets
-    # 清除可能的代理环境变量，避免SOCKS代理问题
-    _proxy_vars = ['ALL_PROXY', 'all_proxy', 'ALL_PROXY', 'HTTP_PROXY', 'http_proxy', 'HTTPS_PROXY', 'https_proxy']
-    for var in _proxy_vars:
-        if var in os.environ:
-            del os.environ[var]
     WEBSOCKETS_AVAILABLE = True
 except ImportError:
     WEBSOCKETS_AVAILABLE = False
@@ -126,7 +121,7 @@ class OKXWebSocket:
         url = urls.get(channel_type, self.PUBLIC_URL)
         
         try:
-            # 创建连接时使用SSL证书并禁用代理
+            # 创建连接时使用SSL证书并禁用代理（不影响全局环境变量）
             self.ws = await websockets.connect(
                 url,
                 ssl=SSL_CONTEXT,

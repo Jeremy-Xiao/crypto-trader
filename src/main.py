@@ -9,6 +9,7 @@ import sys
 import asyncio
 from pathlib import Path
 from datetime import datetime
+from typing import Optional
 
 # Add project root to path
 project_root = Path(__file__).parent.parent
@@ -134,7 +135,8 @@ class CryptoTrader:
             return
         
         # 显示市场信息
-        self.display_market_info()
+        default_inst = self.config.trading.default_instId
+        self.display_market_info([default_inst, "ETH-USDT"])
         
         # 显示账户信息（如果有执行器）
         if self.executor:
@@ -145,7 +147,7 @@ class CryptoTrader:
             balance = self.executor.get_balance("USDT")
             if balance:
                 for bal_data in balance:
-                    for bal in bal_data.get("balData", []):
+                    for bal in bal_data.get("details", []):
                         print(f"\n{bal.get('ccy')}:")
                         print(f"  总额: {bal.get('bal')}")
                         print(f"  可用: {bal.get('availBal')}")

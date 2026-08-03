@@ -14,13 +14,18 @@ from typing import Optional, Dict, Any
 class TradeLogger:
     """交易日志器 - 记录所有交易事件"""
     
-    def __init__(self, log_dir: str = "logs"):
+    # 项目根目录
+    PROJECT_ROOT = Path(__file__).parent.parent.parent
+    
+    def __init__(self, log_dir: str = None):
         """
         初始化交易日志器
         
         Args:
-            log_dir: 日志目录
+            log_dir: 日志目录（默认使用项目根目录下的logs）
         """
+        if log_dir is None:
+            log_dir = str(self.PROJECT_ROOT / "logs")
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
         
@@ -256,8 +261,9 @@ def get_logger(name: str = "crypto_trader") -> logging.Logger:
     if not logger.handlers:
         logger.setLevel(logging.INFO)
         
-        # 文件handler
-        log_dir = Path("logs")
+        # 文件handler（使用项目根目录）
+        project_root = Path(__file__).parent.parent.parent
+        log_dir = project_root / "logs"
         log_dir.mkdir(parents=True, exist_ok=True)
         
         file_handler = logging.FileHandler(log_dir / "trader.log")
