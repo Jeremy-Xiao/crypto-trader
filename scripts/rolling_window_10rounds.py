@@ -29,7 +29,7 @@ OVERFIT_THRESHOLD = 3.0
 
 # 组合层面风控参数
 MAX_POSITIONS = 3           # 最大同时持仓数
-CORR_THRESHOLD = 0.9        # 相关性阈值，超过此值的两个币种不重复持仓
+CORR_THRESHOLD = 0.7        # 相关性阈值，超过此值的两个币种不重复持仓
 
 # 手续费感知参数
 ROUND_TRIP_FEE = 2 * FEE_RATE   # 往返手续费 0.2%（买入+卖出）
