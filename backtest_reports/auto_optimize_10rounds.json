@@ -1,0 +1,2260 @@
+{
+  "date": "2026-08-04T04:11:37.706642",
+  "config": {
+    "initial_balance": 10000,
+    "fee_rate": 0.001,
+    "slippage": 0.0005,
+    "symbols": [
+      "BTC-USDT",
+      "ETH-USDT",
+      "SOL-USDT"
+    ],
+    "num_rounds": 10
+  },
+  "round_summaries": [
+    {
+      "round": "R1_Baseline",
+      "avg_return": -2.355458657945219,
+      "avg_drawdown": -4.438643415991177,
+      "avg_sharpe": -0.7033337475936704,
+      "profitable": 2,
+      "total_tests": 12,
+      "best_return": 0.7220415338530983
+    },
+    {
+      "round": "R2_TightSL_WideTP",
+      "avg_return": -2.4962288822084595,
+      "avg_drawdown": -4.433400694781868,
+      "avg_sharpe": -0.7502608220550026,
+      "profitable": 1,
+      "total_tests": 12,
+      "best_return": 0.18537167547014177
+    },
+    {
+      "round": "R3_WideSL_SlowTP",
+      "avg_return": -2.2267906950237983,
+      "avg_drawdown": -4.663559405737084,
+      "avg_sharpe": -0.6492726960746787,
+      "profitable": 3,
+      "total_tests": 12,
+      "best_return": 1.2990530934653723
+    },
+    {
+      "round": "R4_RegimeFilter",
+      "avg_return": -4.629502193911909,
+      "avg_drawdown": -6.762325878079781,
+      "avg_sharpe": -1.28823337277168,
+      "profitable": 0,
+      "total_tests": 3,
+      "best_return": -4.381177999524062
+    },
+    {
+      "round": "R5_FastMA",
+      "avg_return": -3.114343150504459,
+      "avg_drawdown": -5.214740336586453,
+      "avg_sharpe": -0.6992313826668434,
+      "profitable": 3,
+      "total_tests": 12,
+      "best_return": 0.733370654127757
+    },
+    {
+      "round": "R6_SlowMA_HighTrail",
+      "avg_return": -2.7164302105193374,
+      "avg_drawdown": -4.391665109311204,
+      "avg_sharpe": -0.7957808409655356,
+      "profitable": 2,
+      "total_tests": 12,
+      "best_return": 0.7220415338530983
+    },
+    {
+      "round": "R7_Conservative",
+      "avg_return": -1.2145451015528927,
+      "avg_drawdown": -2.3010388044535426,
+      "avg_sharpe": -0.7072452423197806,
+      "profitable": 2,
+      "total_tests": 12,
+      "best_return": 0.367039892561188
+    },
+    {
+      "round": "R8_Aggressive",
+      "avg_return": -3.6734435020871246,
+      "avg_drawdown": -6.724230953454068,
+      "avg_sharpe": -0.6990484717942683,
+      "profitable": 2,
+      "total_tests": 12,
+      "best_return": 1.0650342870112217
+    },
+    {
+      "round": "R9_NoTrailing_WideTP",
+      "avg_return": -3.237459086432262,
+      "avg_drawdown": -5.562480600554703,
+      "avg_sharpe": -0.8128467323767895,
+      "profitable": 3,
+      "total_tests": 12,
+      "best_return": 1.9052355977199478
+    },
+    {
+      "round": "R10_BestCombo",
+      "avg_return": -2.650161954111663,
+      "avg_drawdown": -4.403249819535828,
+      "avg_sharpe": -0.9127178435615345,
+      "profitable": 0,
+      "total_tests": 3,
+      "best_return": -1.6672342871809087
+    }
+  ],
+  "all_results": [
+    {
+      "round": "R9_NoTrailing_WideTP",
+      "symbol": "ETH-USDT",
+      "strategy": "MACD",
+      "total_return": 1.9052355977199478,
+      "max_drawdown": -3.938087215981173,
+      "sharpe_ratio": 0.4345210724152133,
+      "win_rate": 50.0,
+      "total_trades": 6,
+      "final_equity": 10190.523559771995,
+      "stop_stats": {
+        "stop_loss": 1,
+        "take_profit": 0,
+        "trailing_stop": 0,
+        "signal_sell": 5,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R3_WideSL_SlowTP",
+      "symbol": "BTC-USDT",
+      "strategy": "Breakout",
+      "total_return": 1.2990530934653723,
+      "max_drawdown": -5.978075506843279,
+      "sharpe_ratio": 0.2905261242546418,
+      "win_rate": 33.33333333333333,
+      "total_trades": 3,
+      "final_equity": 10129.905309346537,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 1,
+        "trailing_stop": 1,
+        "signal_sell": 0,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R8_Aggressive",
+      "symbol": "BTC-USDT",
+      "strategy": "MACD",
+      "total_return": 1.0650342870112217,
+      "max_drawdown": -3.2494727040378555,
+      "sharpe_ratio": 0.2032045847192321,
+      "win_rate": 40.0,
+      "total_trades": 5,
+      "final_equity": 10106.503428701122,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 0,
+        "trailing_stop": 2,
+        "signal_sell": 3,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 2
+    },
+    {
+      "round": "R9_NoTrailing_WideTP",
+      "symbol": "BTC-USDT",
+      "strategy": "MACD",
+      "total_return": 0.7350911866318893,
+      "max_drawdown": -2.3649932848280883,
+      "sharpe_ratio": 0.19586654891519134,
+      "win_rate": 40.0,
+      "total_trades": 5,
+      "final_equity": 10073.509118663189,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 0,
+        "trailing_stop": 0,
+        "signal_sell": 5,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 2
+    },
+    {
+      "round": "R5_FastMA",
+      "symbol": "BTC-USDT",
+      "strategy": "DoubleMA",
+      "total_return": 0.733370654127757,
+      "max_drawdown": -3.7645706061474464,
+      "sharpe_ratio": 0.2324910631572568,
+      "win_rate": 50.0,
+      "total_trades": 4,
+      "final_equity": 10073.337065412776,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 1,
+        "trailing_stop": 1,
+        "signal_sell": 2,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R1_Baseline",
+      "symbol": "BTC-USDT",
+      "strategy": "MACD",
+      "total_return": 0.7220415338530983,
+      "max_drawdown": -2.188793544541557,
+      "sharpe_ratio": 0.1930110185196207,
+      "win_rate": 40.0,
+      "total_trades": 5,
+      "final_equity": 10072.20415338531,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 0,
+        "trailing_stop": 2,
+        "signal_sell": 3,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 2
+    },
+    {
+      "round": "R3_WideSL_SlowTP",
+      "symbol": "BTC-USDT",
+      "strategy": "MACD",
+      "total_return": 0.7220415338530983,
+      "max_drawdown": -2.188793544541557,
+      "sharpe_ratio": 0.1930110185196207,
+      "win_rate": 40.0,
+      "total_trades": 5,
+      "final_equity": 10072.20415338531,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 0,
+        "trailing_stop": 1,
+        "signal_sell": 4,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 2
+    },
+    {
+      "round": "R5_FastMA",
+      "symbol": "BTC-USDT",
+      "strategy": "MACD",
+      "total_return": 0.7220415338530983,
+      "max_drawdown": -2.188793544541557,
+      "sharpe_ratio": 0.1930110185196207,
+      "win_rate": 40.0,
+      "total_trades": 5,
+      "final_equity": 10072.20415338531,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 0,
+        "trailing_stop": 2,
+        "signal_sell": 3,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 2
+    },
+    {
+      "round": "R6_SlowMA_HighTrail",
+      "symbol": "BTC-USDT",
+      "strategy": "MACD",
+      "total_return": 0.7220415338530983,
+      "max_drawdown": -2.188793544541557,
+      "sharpe_ratio": 0.1930110185196207,
+      "win_rate": 40.0,
+      "total_trades": 5,
+      "final_equity": 10072.20415338531,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 0,
+        "trailing_stop": 2,
+        "signal_sell": 3,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 2
+    },
+    {
+      "round": "R3_WideSL_SlowTP",
+      "symbol": "ETH-USDT",
+      "strategy": "MACD",
+      "total_return": 0.6279753359475216,
+      "max_drawdown": -3.1717188661835904,
+      "sharpe_ratio": 0.16290210491158136,
+      "win_rate": 33.33333333333333,
+      "total_trades": 6,
+      "final_equity": 10062.797533594752,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 0,
+        "trailing_stop": 1,
+        "signal_sell": 5,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R7_Conservative",
+      "symbol": "BTC-USDT",
+      "strategy": "MACD",
+      "total_return": 0.367039892561188,
+      "max_drawdown": -1.1059886224905038,
+      "sharpe_ratio": 0.18277149031460535,
+      "win_rate": 40.0,
+      "total_trades": 5,
+      "final_equity": 10036.703989256119,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 0,
+        "trailing_stop": 2,
+        "signal_sell": 3,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 2
+    },
+    {
+      "round": "R2_TightSL_WideTP",
+      "symbol": "ETH-USDT",
+      "strategy": "MACD",
+      "total_return": 0.18537167547014177,
+      "max_drawdown": -2.7867921648142424,
+      "sharpe_ratio": 0.07469598950044169,
+      "win_rate": 50.0,
+      "total_trades": 6,
+      "final_equity": 10018.537167547014,
+      "stop_stats": {
+        "stop_loss": 1,
+        "take_profit": 0,
+        "trailing_stop": 3,
+        "signal_sell": 2,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R8_Aggressive",
+      "symbol": "SOL-USDT",
+      "strategy": "MACD",
+      "total_return": 0.17896121068282808,
+      "max_drawdown": -4.065265974990168,
+      "sharpe_ratio": 0.06787770385154394,
+      "win_rate": 20.0,
+      "total_trades": 5,
+      "final_equity": 10017.896121068283,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 0,
+        "trailing_stop": 2,
+        "signal_sell": 3,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R1_Baseline",
+      "symbol": "SOL-USDT",
+      "strategy": "MACD",
+      "total_return": 0.1296014776771517,
+      "max_drawdown": -2.7437730856732534,
+      "sharpe_ratio": 0.056133155015742564,
+      "win_rate": 20.0,
+      "total_trades": 5,
+      "final_equity": 10012.960147767715,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 0,
+        "trailing_stop": 2,
+        "signal_sell": 3,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R5_FastMA",
+      "symbol": "SOL-USDT",
+      "strategy": "MACD",
+      "total_return": 0.1296014776771517,
+      "max_drawdown": -2.7437730856732534,
+      "sharpe_ratio": 0.056133155015742564,
+      "win_rate": 20.0,
+      "total_trades": 5,
+      "final_equity": 10012.960147767715,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 0,
+        "trailing_stop": 2,
+        "signal_sell": 3,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R6_SlowMA_HighTrail",
+      "symbol": "SOL-USDT",
+      "strategy": "MACD",
+      "total_return": 0.1296014776771517,
+      "max_drawdown": -2.7437730856732534,
+      "sharpe_ratio": 0.056133155015742564,
+      "win_rate": 20.0,
+      "total_trades": 5,
+      "final_equity": 10012.960147767715,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 0,
+        "trailing_stop": 2,
+        "signal_sell": 3,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R9_NoTrailing_WideTP",
+      "symbol": "SOL-USDT",
+      "strategy": "MACD",
+      "total_return": 0.11677356582309585,
+      "max_drawdown": -3.5648957415428444,
+      "sharpe_ratio": 0.05354331684981594,
+      "win_rate": 20.0,
+      "total_trades": 5,
+      "final_equity": 10011.67735658231,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 0,
+        "trailing_stop": 0,
+        "signal_sell": 5,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R7_Conservative",
+      "symbol": "SOL-USDT",
+      "strategy": "MACD",
+      "total_return": 0.06997520605198587,
+      "max_drawdown": -1.3891052920489548,
+      "sharpe_ratio": 0.04431899130974695,
+      "win_rate": 20.0,
+      "total_trades": 5,
+      "final_equity": 10006.997520605199,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 0,
+        "trailing_stop": 2,
+        "signal_sell": 3,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R6_SlowMA_HighTrail",
+      "symbol": "BTC-USDT",
+      "strategy": "DoubleMA",
+      "total_return": 0.0,
+      "max_drawdown": 0.0,
+      "sharpe_ratio": 0,
+      "win_rate": 0,
+      "total_trades": 0,
+      "final_equity": 10000.0,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 0,
+        "trailing_stop": 0,
+        "signal_sell": 0,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R7_Conservative",
+      "symbol": "ETH-USDT",
+      "strategy": "MACD",
+      "total_return": -0.006687347622719244,
+      "max_drawdown": -1.9953627148861837,
+      "sharpe_ratio": 0.009957979672447949,
+      "win_rate": 33.33333333333333,
+      "total_trades": 6,
+      "final_equity": 9999.331265237728,
+      "stop_stats": {
+        "stop_loss": 1,
+        "take_profit": 0,
+        "trailing_stop": 3,
+        "signal_sell": 2,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R1_Baseline",
+      "symbol": "ETH-USDT",
+      "strategy": "MACD",
+      "total_return": -0.023040210966391896,
+      "max_drawdown": -3.938087215981173,
+      "sharpe_ratio": 0.02063848555326768,
+      "win_rate": 33.33333333333333,
+      "total_trades": 6,
+      "final_equity": 9997.69597890336,
+      "stop_stats": {
+        "stop_loss": 1,
+        "take_profit": 0,
+        "trailing_stop": 3,
+        "signal_sell": 2,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R5_FastMA",
+      "symbol": "ETH-USDT",
+      "strategy": "MACD",
+      "total_return": -0.023040210966391896,
+      "max_drawdown": -3.938087215981173,
+      "sharpe_ratio": 0.02063848555326768,
+      "win_rate": 33.33333333333333,
+      "total_trades": 6,
+      "final_equity": 9997.69597890336,
+      "stop_stats": {
+        "stop_loss": 1,
+        "take_profit": 0,
+        "trailing_stop": 3,
+        "signal_sell": 2,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R6_SlowMA_HighTrail",
+      "symbol": "ETH-USDT",
+      "strategy": "MACD",
+      "total_return": -0.023040210966391896,
+      "max_drawdown": -3.938087215981173,
+      "sharpe_ratio": 0.02063848555326768,
+      "win_rate": 33.33333333333333,
+      "total_trades": 6,
+      "final_equity": 9997.69597890336,
+      "stop_stats": {
+        "stop_loss": 1,
+        "take_profit": 0,
+        "trailing_stop": 3,
+        "signal_sell": 2,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R8_Aggressive",
+      "symbol": "ETH-USDT",
+      "strategy": "MACD",
+      "total_return": -0.04902863678220455,
+      "max_drawdown": -5.830243484378742,
+      "sharpe_ratio": 0.031190544546989052,
+      "win_rate": 33.33333333333333,
+      "total_trades": 6,
+      "final_equity": 9995.09713632178,
+      "stop_stats": {
+        "stop_loss": 1,
+        "take_profit": 0,
+        "trailing_stop": 3,
+        "signal_sell": 2,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R6_SlowMA_HighTrail",
+      "symbol": "SOL-USDT",
+      "strategy": "DoubleMA",
+      "total_return": -0.2807708355789328,
+      "max_drawdown": -0.896547492610297,
+      "sharpe_ratio": -0.2717270318105564,
+      "win_rate": 0.0,
+      "total_trades": 1,
+      "final_equity": 9971.922916442107,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 0,
+        "trailing_stop": 0,
+        "signal_sell": 1,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R7_Conservative",
+      "symbol": "ETH-USDT",
+      "strategy": "DoubleMA",
+      "total_return": -0.3245651678518516,
+      "max_drawdown": -0.6446050505419831,
+      "sharpe_ratio": -0.5296928733261725,
+      "win_rate": 0.0,
+      "total_trades": 2,
+      "final_equity": 9967.543483214815,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 0,
+        "trailing_stop": 0,
+        "signal_sell": 2,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R6_SlowMA_HighTrail",
+      "symbol": "ETH-USDT",
+      "strategy": "DoubleMA",
+      "total_return": -0.6478231649728514,
+      "max_drawdown": -0.6478231649728514,
+      "sharpe_ratio": -1.1673234093966822,
+      "win_rate": 0.0,
+      "total_trades": 1,
+      "final_equity": 9935.217683502715,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 0,
+        "trailing_stop": 0,
+        "signal_sell": 1,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R1_Baseline",
+      "symbol": "ETH-USDT",
+      "strategy": "DoubleMA",
+      "total_return": -0.6486111178491228,
+      "max_drawdown": -1.2845680335719691,
+      "sharpe_ratio": -0.5274495822051352,
+      "win_rate": 0.0,
+      "total_trades": 2,
+      "final_equity": 9935.138888215088,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 0,
+        "trailing_stop": 0,
+        "signal_sell": 2,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R2_TightSL_WideTP",
+      "symbol": "ETH-USDT",
+      "strategy": "DoubleMA",
+      "total_return": -0.6486111178491228,
+      "max_drawdown": -1.2845680335719691,
+      "sharpe_ratio": -0.5274495822051352,
+      "win_rate": 0.0,
+      "total_trades": 2,
+      "final_equity": 9935.138888215088,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 0,
+        "trailing_stop": 0,
+        "signal_sell": 2,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R3_WideSL_SlowTP",
+      "symbol": "ETH-USDT",
+      "strategy": "DoubleMA",
+      "total_return": -0.6486111178491228,
+      "max_drawdown": -1.2845680335719691,
+      "sharpe_ratio": -0.5274495822051352,
+      "win_rate": 0.0,
+      "total_trades": 2,
+      "final_equity": 9935.138888215088,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 0,
+        "trailing_stop": 0,
+        "signal_sell": 2,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R9_NoTrailing_WideTP",
+      "symbol": "ETH-USDT",
+      "strategy": "DoubleMA",
+      "total_return": -0.6486111178491228,
+      "max_drawdown": -1.2845680335719691,
+      "sharpe_ratio": -0.5274495822051352,
+      "win_rate": 0.0,
+      "total_trades": 2,
+      "final_equity": 9935.138888215088,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 0,
+        "trailing_stop": 0,
+        "signal_sell": 2,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R3_WideSL_SlowTP",
+      "symbol": "SOL-USDT",
+      "strategy": "MACD",
+      "total_return": -0.6912216109926157,
+      "max_drawdown": -3.564895741542864,
+      "sharpe_ratio": -0.12007518845051326,
+      "win_rate": 20.0,
+      "total_trades": 5,
+      "final_equity": 9930.877838900738,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 0,
+        "trailing_stop": 2,
+        "signal_sell": 3,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R2_TightSL_WideTP",
+      "symbol": "BTC-USDT",
+      "strategy": "MACD",
+      "total_return": -0.779289101154809,
+      "max_drawdown": -3.1442393012343457,
+      "sharpe_ratio": -0.220014504935425,
+      "win_rate": 40.0,
+      "total_trades": 5,
+      "final_equity": 9922.07108988452,
+      "stop_stats": {
+        "stop_loss": 2,
+        "take_profit": 0,
+        "trailing_stop": 1,
+        "signal_sell": 2,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 2
+    },
+    {
+      "round": "R7_Conservative",
+      "symbol": "BTC-USDT",
+      "strategy": "DoubleMA",
+      "total_return": -0.7978297261710577,
+      "max_drawdown": -0.7978297261710577,
+      "sharpe_ratio": -1.4925229617694775,
+      "win_rate": 0.0,
+      "total_trades": 2,
+      "final_equity": 9920.217027382894,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 0,
+        "trailing_stop": 0,
+        "signal_sell": 2,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R8_Aggressive",
+      "symbol": "ETH-USDT",
+      "strategy": "DoubleMA",
+      "total_return": -0.9721378499918683,
+      "max_drawdown": -1.9199333783115917,
+      "sharpe_ratio": -0.5252083169911257,
+      "win_rate": 0.0,
+      "total_trades": 2,
+      "final_equity": 9902.786215000813,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 0,
+        "trailing_stop": 0,
+        "signal_sell": 2,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R2_TightSL_WideTP",
+      "symbol": "SOL-USDT",
+      "strategy": "MACD",
+      "total_return": -1.1347207626702038,
+      "max_drawdown": -2.67293010073698,
+      "sharpe_ratio": -0.3435469330758288,
+      "win_rate": 60.0,
+      "total_trades": 5,
+      "final_equity": 9886.52792373298,
+      "stop_stats": {
+        "stop_loss": 1,
+        "take_profit": 0,
+        "trailing_stop": 4,
+        "signal_sell": 0,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R7_Conservative",
+      "symbol": "BTC-USDT",
+      "strategy": "Breakout",
+      "total_return": -1.2613712777528419,
+      "max_drawdown": -2.8563382189019046,
+      "sharpe_ratio": -0.459001304906846,
+      "win_rate": 40.0,
+      "total_trades": 5,
+      "final_equity": 9873.862872224716,
+      "stop_stats": {
+        "stop_loss": 2,
+        "take_profit": 1,
+        "trailing_stop": 2,
+        "signal_sell": 0,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R7_Conservative",
+      "symbol": "SOL-USDT",
+      "strategy": "DoubleMA",
+      "total_return": -1.345393634212123,
+      "max_drawdown": -1.686905404648948,
+      "sharpe_ratio": -0.9401714862326047,
+      "win_rate": 0.0,
+      "total_trades": 4,
+      "final_equity": 9865.460636578788,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 0,
+        "trailing_stop": 1,
+        "signal_sell": 3,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R1_Baseline",
+      "symbol": "BTC-USDT",
+      "strategy": "DoubleMA",
+      "total_return": -1.5929423750907519,
+      "max_drawdown": -1.5929423750907519,
+      "sharpe_ratio": -1.492389310220445,
+      "win_rate": 0.0,
+      "total_trades": 2,
+      "final_equity": 9840.705762490925,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 0,
+        "trailing_stop": 0,
+        "signal_sell": 2,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R2_TightSL_WideTP",
+      "symbol": "BTC-USDT",
+      "strategy": "DoubleMA",
+      "total_return": -1.5929423750907519,
+      "max_drawdown": -1.5929423750907519,
+      "sharpe_ratio": -1.492389310220445,
+      "win_rate": 0.0,
+      "total_trades": 2,
+      "final_equity": 9840.705762490925,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 0,
+        "trailing_stop": 0,
+        "signal_sell": 2,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R3_WideSL_SlowTP",
+      "symbol": "BTC-USDT",
+      "strategy": "DoubleMA",
+      "total_return": -1.5929423750907519,
+      "max_drawdown": -1.5929423750907519,
+      "sharpe_ratio": -1.492389310220445,
+      "win_rate": 0.0,
+      "total_trades": 2,
+      "final_equity": 9840.705762490925,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 0,
+        "trailing_stop": 0,
+        "signal_sell": 2,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R9_NoTrailing_WideTP",
+      "symbol": "BTC-USDT",
+      "strategy": "DoubleMA",
+      "total_return": -1.5929423750907519,
+      "max_drawdown": -1.5929423750907519,
+      "sharpe_ratio": -1.492389310220445,
+      "win_rate": 0.0,
+      "total_trades": 2,
+      "final_equity": 9840.705762490925,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 0,
+        "trailing_stop": 0,
+        "signal_sell": 2,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R10_BestCombo",
+      "symbol": "SOL-USDT",
+      "strategy": "RSI_Boll",
+      "total_return": -1.6672342871809087,
+      "max_drawdown": -3.5406897198260956,
+      "sharpe_ratio": -0.6239152191591989,
+      "win_rate": 42.857142857142854,
+      "total_trades": 7,
+      "final_equity": 9833.27657128191,
+      "stop_stats": {
+        "stop_loss": 3,
+        "take_profit": 0,
+        "trailing_stop": 1,
+        "signal_sell": 3,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R7_Conservative",
+      "symbol": "SOL-USDT",
+      "strategy": "Breakout",
+      "total_return": -1.923985579894379,
+      "max_drawdown": -2.731236497801574,
+      "sharpe_ratio": -0.6971050617048493,
+      "win_rate": 33.33333333333333,
+      "total_trades": 6,
+      "final_equity": 9807.601442010562,
+      "stop_stats": {
+        "stop_loss": 1,
+        "take_profit": 0,
+        "trailing_stop": 5,
+        "signal_sell": 0,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R7_Conservative",
+      "symbol": "ETH-USDT",
+      "strategy": "Breakout",
+      "total_return": -1.9487680485787497,
+      "max_drawdown": -3.47725158074658,
+      "sharpe_ratio": -0.7528949650184619,
+      "win_rate": 33.33333333333333,
+      "total_trades": 6,
+      "final_equity": 9805.123195142125,
+      "stop_stats": {
+        "stop_loss": 1,
+        "take_profit": 0,
+        "trailing_stop": 4,
+        "signal_sell": 0,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R2_TightSL_WideTP",
+      "symbol": "SOL-USDT",
+      "strategy": "RSI_Boll",
+      "total_return": -2.0942838730977744,
+      "max_drawdown": -4.4168047154119625,
+      "sharpe_ratio": -0.6243235462724235,
+      "win_rate": 42.857142857142854,
+      "total_trades": 7,
+      "final_equity": 9790.571612690223,
+      "stop_stats": {
+        "stop_loss": 3,
+        "take_profit": 0,
+        "trailing_stop": 1,
+        "signal_sell": 3,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R2_TightSL_WideTP",
+      "symbol": "SOL-USDT",
+      "strategy": "DoubleMA",
+      "total_return": -2.229270638456601,
+      "max_drawdown": -2.885486409991683,
+      "sharpe_ratio": -0.909678468214661,
+      "win_rate": 25.0,
+      "total_trades": 4,
+      "final_equity": 9777.07293615434,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 0,
+        "trailing_stop": 1,
+        "signal_sell": 3,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R8_Aggressive",
+      "symbol": "BTC-USDT",
+      "strategy": "DoubleMA",
+      "total_return": -2.260586830659922,
+      "max_drawdown": -2.260586830659922,
+      "sharpe_ratio": -1.4844005286688953,
+      "win_rate": 0.0,
+      "total_trades": 2,
+      "final_equity": 9773.941316934008,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 0,
+        "trailing_stop": 0,
+        "signal_sell": 2,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R7_Conservative",
+      "symbol": "BTC-USDT",
+      "strategy": "RSI_Boll",
+      "total_return": -2.3310163735291645,
+      "max_drawdown": -3.4553272594003843,
+      "sharpe_ratio": -1.1229858863418358,
+      "win_rate": 44.44444444444444,
+      "total_trades": 9,
+      "final_equity": 9766.898362647084,
+      "stop_stats": {
+        "stop_loss": 4,
+        "take_profit": 0,
+        "trailing_stop": 2,
+        "signal_sell": 3,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R7_Conservative",
+      "symbol": "SOL-USDT",
+      "strategy": "RSI_Boll",
+      "total_return": -2.359937618763015,
+      "max_drawdown": -3.6009558358509093,
+      "sharpe_ratio": -1.3633593583600898,
+      "win_rate": 33.33333333333333,
+      "total_trades": 6,
+      "final_equity": 9764.006238123698,
+      "stop_stats": {
+        "stop_loss": 3,
+        "take_profit": 0,
+        "trailing_stop": 1,
+        "signal_sell": 2,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R5_FastMA",
+      "symbol": "SOL-USDT",
+      "strategy": "DoubleMA",
+      "total_return": -2.386640404159862,
+      "max_drawdown": -2.7821765070558464,
+      "sharpe_ratio": -0.9079095242711173,
+      "win_rate": 0.0,
+      "total_trades": 5,
+      "final_equity": 9761.335959584014,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 0,
+        "trailing_stop": 1,
+        "signal_sell": 4,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 2
+    },
+    {
+      "round": "R2_TightSL_WideTP",
+      "symbol": "BTC-USDT",
+      "strategy": "Breakout",
+      "total_return": -2.4898115013415008,
+      "max_drawdown": -6.823072433709868,
+      "sharpe_ratio": -0.5886160726462297,
+      "win_rate": 33.33333333333333,
+      "total_trades": 6,
+      "final_equity": 9751.01884986585,
+      "stop_stats": {
+        "stop_loss": 3,
+        "take_profit": 0,
+        "trailing_stop": 3,
+        "signal_sell": 0,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R1_Baseline",
+      "symbol": "BTC-USDT",
+      "strategy": "Breakout",
+      "total_return": -2.5684581131362756,
+      "max_drawdown": -5.666126193448502,
+      "sharpe_ratio": -0.4559820221850368,
+      "win_rate": 40.0,
+      "total_trades": 5,
+      "final_equity": 9743.154188686372,
+      "stop_stats": {
+        "stop_loss": 2,
+        "take_profit": 1,
+        "trailing_stop": 2,
+        "signal_sell": 0,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R5_FastMA",
+      "symbol": "BTC-USDT",
+      "strategy": "Breakout",
+      "total_return": -2.5979188213598357,
+      "max_drawdown": -4.750433632286949,
+      "sharpe_ratio": -0.3834105544660925,
+      "win_rate": 14.285714285714285,
+      "total_trades": 7,
+      "final_equity": 9740.208117864016,
+      "stop_stats": {
+        "stop_loss": 2,
+        "take_profit": 1,
+        "trailing_stop": 4,
+        "signal_sell": 0,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R1_Baseline",
+      "symbol": "SOL-USDT",
+      "strategy": "DoubleMA",
+      "total_return": -2.678622902312909,
+      "max_drawdown": -3.331822719641215,
+      "sharpe_ratio": -0.9378059452431615,
+      "win_rate": 0.0,
+      "total_trades": 4,
+      "final_equity": 9732.13770976871,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 0,
+        "trailing_stop": 1,
+        "signal_sell": 3,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R7_Conservative",
+      "symbol": "ETH-USDT",
+      "strategy": "RSI_Boll",
+      "total_return": -2.712001542871985,
+      "max_drawdown": -3.8715594499535295,
+      "sharpe_ratio": -1.3662574714738296,
+      "win_rate": 37.5,
+      "total_trades": 8,
+      "final_equity": 9728.799845712801,
+      "stop_stats": {
+        "stop_loss": 4,
+        "take_profit": 0,
+        "trailing_stop": 2,
+        "signal_sell": 2,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R10_BestCombo",
+      "symbol": "ETH-USDT",
+      "strategy": "RSI_Boll",
+      "total_return": -3.0305209119152456,
+      "max_drawdown": -4.7539776131810685,
+      "sharpe_ratio": -1.0540260534226402,
+      "win_rate": 37.5,
+      "total_trades": 8,
+      "final_equity": 9696.947908808475,
+      "stop_stats": {
+        "stop_loss": 4,
+        "take_profit": 0,
+        "trailing_stop": 2,
+        "signal_sell": 2,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R3_WideSL_SlowTP",
+      "symbol": "ETH-USDT",
+      "strategy": "Breakout",
+      "total_return": -3.1704017151500006,
+      "max_drawdown": -5.894648904206249,
+      "sharpe_ratio": -0.5190725180908823,
+      "win_rate": 40.0,
+      "total_trades": 5,
+      "final_equity": 9682.959828485,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 0,
+        "trailing_stop": 4,
+        "signal_sell": 0,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R10_BestCombo",
+      "symbol": "BTC-USDT",
+      "strategy": "RSI_Boll",
+      "total_return": -3.2527306632388355,
+      "max_drawdown": -4.915082125600321,
+      "sharpe_ratio": -1.0602122581027642,
+      "win_rate": 44.44444444444444,
+      "total_trades": 9,
+      "final_equity": 9674.726933676116,
+      "stop_stats": {
+        "stop_loss": 5,
+        "take_profit": 0,
+        "trailing_stop": 1,
+        "signal_sell": 3,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R8_Aggressive",
+      "symbol": "BTC-USDT",
+      "strategy": "Breakout",
+      "total_return": -3.323518049123704,
+      "max_drawdown": -6.99412328369015,
+      "sharpe_ratio": -0.4259978464083691,
+      "win_rate": 40.0,
+      "total_trades": 5,
+      "final_equity": 9667.64819508763,
+      "stop_stats": {
+        "stop_loss": 2,
+        "take_profit": 1,
+        "trailing_stop": 2,
+        "signal_sell": 0,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R3_WideSL_SlowTP",
+      "symbol": "SOL-USDT",
+      "strategy": "DoubleMA",
+      "total_return": -3.5002956133644325,
+      "max_drawdown": -4.147980543000348,
+      "sharpe_ratio": -1.1958402451093038,
+      "win_rate": 0.0,
+      "total_trades": 4,
+      "final_equity": 9649.970438663557,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 0,
+        "trailing_stop": 1,
+        "signal_sell": 3,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R9_NoTrailing_WideTP",
+      "symbol": "SOL-USDT",
+      "strategy": "DoubleMA",
+      "total_return": -3.5002956133644325,
+      "max_drawdown": -4.147980543000348,
+      "sharpe_ratio": -1.1958402451093038,
+      "win_rate": 0.0,
+      "total_trades": 4,
+      "final_equity": 9649.970438663557,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 0,
+        "trailing_stop": 0,
+        "signal_sell": 4,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R6_SlowMA_HighTrail",
+      "symbol": "SOL-USDT",
+      "strategy": "RSI_Boll",
+      "total_return": -3.609121586316378,
+      "max_drawdown": -5.881172437633013,
+      "sharpe_ratio": -1.0756771156790599,
+      "win_rate": 50.0,
+      "total_trades": 6,
+      "final_equity": 9639.087841368362,
+      "stop_stats": {
+        "stop_loss": 3,
+        "take_profit": 0,
+        "trailing_stop": 0,
+        "signal_sell": 3,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R9_NoTrailing_WideTP",
+      "symbol": "SOL-USDT",
+      "strategy": "RSI_Boll",
+      "total_return": -3.609121586316378,
+      "max_drawdown": -5.881172437633013,
+      "sharpe_ratio": -1.0756771156790599,
+      "win_rate": 50.0,
+      "total_trades": 6,
+      "final_equity": 9639.087841368362,
+      "stop_stats": {
+        "stop_loss": 3,
+        "take_profit": 0,
+        "trailing_stop": 0,
+        "signal_sell": 3,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R2_TightSL_WideTP",
+      "symbol": "ETH-USDT",
+      "strategy": "RSI_Boll",
+      "total_return": -3.7942731820522937,
+      "max_drawdown": -5.922249359771813,
+      "sharpe_ratio": -1.0554385442190855,
+      "win_rate": 37.5,
+      "total_trades": 8,
+      "final_equity": 9620.57268179477,
+      "stop_stats": {
+        "stop_loss": 4,
+        "take_profit": 0,
+        "trailing_stop": 2,
+        "signal_sell": 2,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R1_Baseline",
+      "symbol": "SOL-USDT",
+      "strategy": "Breakout",
+      "total_return": -3.8260228435941825,
+      "max_drawdown": -5.364186118953415,
+      "sharpe_ratio": -0.6870130327513349,
+      "win_rate": 33.33333333333333,
+      "total_trades": 6,
+      "final_equity": 9617.397715640582,
+      "stop_stats": {
+        "stop_loss": 1,
+        "take_profit": 0,
+        "trailing_stop": 5,
+        "signal_sell": 0,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R3_WideSL_SlowTP",
+      "symbol": "SOL-USDT",
+      "strategy": "RSI_Boll",
+      "total_return": -3.8846775201649324,
+      "max_drawdown": -6.150233181227177,
+      "sharpe_ratio": -1.1285929474745002,
+      "win_rate": 50.0,
+      "total_trades": 6,
+      "final_equity": 9611.532247983507,
+      "stop_stats": {
+        "stop_loss": 3,
+        "take_profit": 0,
+        "trailing_stop": 0,
+        "signal_sell": 3,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R1_Baseline",
+      "symbol": "ETH-USDT",
+      "strategy": "Breakout",
+      "total_return": -3.8909427621875143,
+      "max_drawdown": -6.866444070752957,
+      "sharpe_ratio": -0.7444476192925228,
+      "win_rate": 33.33333333333333,
+      "total_trades": 6,
+      "final_equity": 9610.905723781249,
+      "stop_stats": {
+        "stop_loss": 1,
+        "take_profit": 0,
+        "trailing_stop": 4,
+        "signal_sell": 0,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R8_Aggressive",
+      "symbol": "SOL-USDT",
+      "strategy": "DoubleMA",
+      "total_return": -3.999746757448138,
+      "max_drawdown": -4.93629136907612,
+      "sharpe_ratio": -0.9354711241999725,
+      "win_rate": 0.0,
+      "total_trades": 4,
+      "final_equity": 9600.025324255186,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 0,
+        "trailing_stop": 1,
+        "signal_sell": 3,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R9_NoTrailing_WideTP",
+      "symbol": "BTC-USDT",
+      "strategy": "RSI_Boll",
+      "total_return": -4.043438540671705,
+      "max_drawdown": -6.096834419230547,
+      "sharpe_ratio": -1.03110886305919,
+      "win_rate": 50.0,
+      "total_trades": 8,
+      "final_equity": 9595.65614593283,
+      "stop_stats": {
+        "stop_loss": 4,
+        "take_profit": 0,
+        "trailing_stop": 0,
+        "signal_sell": 4,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R2_TightSL_WideTP",
+      "symbol": "BTC-USDT",
+      "strategy": "RSI_Boll",
+      "total_return": -4.069944870491617,
+      "max_drawdown": -6.122773534181758,
+      "sharpe_ratio": -1.061315626127618,
+      "win_rate": 44.44444444444444,
+      "total_trades": 9,
+      "final_equity": 9593.005512950838,
+      "stop_stats": {
+        "stop_loss": 5,
+        "take_profit": 0,
+        "trailing_stop": 1,
+        "signal_sell": 3,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R1_Baseline",
+      "symbol": "BTC-USDT",
+      "strategy": "RSI_Boll",
+      "total_return": -4.381177999524062,
+      "max_drawdown": -6.4273465160110606,
+      "sharpe_ratio": -1.1265760380981114,
+      "win_rate": 44.44444444444444,
+      "total_trades": 9,
+      "final_equity": 9561.882200047594,
+      "stop_stats": {
+        "stop_loss": 4,
+        "take_profit": 0,
+        "trailing_stop": 2,
+        "signal_sell": 3,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R4_RegimeFilter",
+      "symbol": "BTC-USDT",
+      "strategy": "RSI_Boll",
+      "total_return": -4.381177999524062,
+      "max_drawdown": -6.4273465160110606,
+      "sharpe_ratio": -1.1265760380981114,
+      "win_rate": 44.44444444444444,
+      "total_trades": 9,
+      "final_equity": 9561.882200047594,
+      "stop_stats": {
+        "stop_loss": 4,
+        "take_profit": 0,
+        "trailing_stop": 2,
+        "signal_sell": 3,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R5_FastMA",
+      "symbol": "BTC-USDT",
+      "strategy": "RSI_Boll",
+      "total_return": -4.381177999524062,
+      "max_drawdown": -6.4273465160110606,
+      "sharpe_ratio": -1.1265760380981114,
+      "win_rate": 44.44444444444444,
+      "total_trades": 9,
+      "final_equity": 9561.882200047594,
+      "stop_stats": {
+        "stop_loss": 4,
+        "take_profit": 0,
+        "trailing_stop": 2,
+        "signal_sell": 3,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R6_SlowMA_HighTrail",
+      "symbol": "BTC-USDT",
+      "strategy": "RSI_Boll",
+      "total_return": -4.381177999524062,
+      "max_drawdown": -6.4273465160110606,
+      "sharpe_ratio": -1.1265760380981114,
+      "win_rate": 44.44444444444444,
+      "total_trades": 9,
+      "final_equity": 9561.882200047594,
+      "stop_stats": {
+        "stop_loss": 4,
+        "take_profit": 0,
+        "trailing_stop": 2,
+        "signal_sell": 3,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R1_Baseline",
+      "symbol": "SOL-USDT",
+      "strategy": "RSI_Boll",
+      "total_return": -4.426873757117155,
+      "max_drawdown": -6.679649189987467,
+      "sharpe_ratio": -1.367829017656168,
+      "win_rate": 33.33333333333333,
+      "total_trades": 6,
+      "final_equity": 9557.312624288284,
+      "stop_stats": {
+        "stop_loss": 3,
+        "take_profit": 0,
+        "trailing_stop": 1,
+        "signal_sell": 2,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R4_RegimeFilter",
+      "symbol": "SOL-USDT",
+      "strategy": "RSI_Boll",
+      "total_return": -4.426873757117155,
+      "max_drawdown": -6.679649189987467,
+      "sharpe_ratio": -1.367829017656168,
+      "win_rate": 33.33333333333333,
+      "total_trades": 6,
+      "final_equity": 9557.312624288284,
+      "stop_stats": {
+        "stop_loss": 3,
+        "take_profit": 0,
+        "trailing_stop": 1,
+        "signal_sell": 2,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R5_FastMA",
+      "symbol": "SOL-USDT",
+      "strategy": "RSI_Boll",
+      "total_return": -4.426873757117155,
+      "max_drawdown": -6.679649189987467,
+      "sharpe_ratio": -1.367829017656168,
+      "win_rate": 33.33333333333333,
+      "total_trades": 6,
+      "final_equity": 9557.312624288284,
+      "stop_stats": {
+        "stop_loss": 3,
+        "take_profit": 0,
+        "trailing_stop": 1,
+        "signal_sell": 2,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R5_FastMA",
+      "symbol": "ETH-USDT",
+      "strategy": "DoubleMA",
+      "total_return": -4.4419494933799974,
+      "max_drawdown": -4.688005191044116,
+      "sharpe_ratio": -1.349204960263348,
+      "win_rate": 0.0,
+      "total_trades": 7,
+      "final_equity": 9555.805050662,
+      "stop_stats": {
+        "stop_loss": 0,
+        "take_profit": 0,
+        "trailing_stop": 1,
+        "signal_sell": 6,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R3_WideSL_SlowTP",
+      "symbol": "BTC-USDT",
+      "strategy": "RSI_Boll",
+      "total_return": -4.938190667830677,
+      "max_drawdown": -7.21896628743864,
+      "sharpe_ratio": -1.1729412466100693,
+      "win_rate": 57.14285714285714,
+      "total_trades": 7,
+      "final_equity": 9506.180933216932,
+      "stop_stats": {
+        "stop_loss": 3,
+        "take_profit": 0,
+        "trailing_stop": 0,
+        "signal_sell": 4,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R9_NoTrailing_WideTP",
+      "symbol": "ETH-USDT",
+      "strategy": "RSI_Boll",
+      "total_return": -4.946401572704563,
+      "max_drawdown": -7.048893802117946,
+      "sharpe_ratio": -1.3489887248746386,
+      "win_rate": 42.857142857142854,
+      "total_trades": 7,
+      "final_equity": 9505.359842729544,
+      "stop_stats": {
+        "stop_loss": 4,
+        "take_profit": 0,
+        "trailing_stop": 0,
+        "signal_sell": 3,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R1_Baseline",
+      "symbol": "ETH-USDT",
+      "strategy": "RSI_Boll",
+      "total_return": -5.080454825094511,
+      "max_drawdown": -7.179981928240814,
+      "sharpe_ratio": -1.3702950625607602,
+      "win_rate": 37.5,
+      "total_trades": 8,
+      "final_equity": 9491.954517490549,
+      "stop_stats": {
+        "stop_loss": 4,
+        "take_profit": 0,
+        "trailing_stop": 2,
+        "signal_sell": 2,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R4_RegimeFilter",
+      "symbol": "ETH-USDT",
+      "strategy": "RSI_Boll",
+      "total_return": -5.080454825094511,
+      "max_drawdown": -7.179981928240814,
+      "sharpe_ratio": -1.3702950625607602,
+      "win_rate": 37.5,
+      "total_trades": 8,
+      "final_equity": 9491.954517490549,
+      "stop_stats": {
+        "stop_loss": 4,
+        "take_profit": 0,
+        "trailing_stop": 2,
+        "signal_sell": 2,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R5_FastMA",
+      "symbol": "ETH-USDT",
+      "strategy": "RSI_Boll",
+      "total_return": -5.080454825094511,
+      "max_drawdown": -7.179981928240814,
+      "sharpe_ratio": -1.3702950625607602,
+      "win_rate": 37.5,
+      "total_trades": 8,
+      "final_equity": 9491.954517490549,
+      "stop_stats": {
+        "stop_loss": 4,
+        "take_profit": 0,
+        "trailing_stop": 2,
+        "signal_sell": 2,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R6_SlowMA_HighTrail",
+      "symbol": "ETH-USDT",
+      "strategy": "RSI_Boll",
+      "total_return": -5.080454825094511,
+      "max_drawdown": -7.179981928240814,
+      "sharpe_ratio": -1.3702950625607602,
+      "win_rate": 37.5,
+      "total_trades": 8,
+      "final_equity": 9491.954517490549,
+      "stop_stats": {
+        "stop_loss": 4,
+        "take_profit": 0,
+        "trailing_stop": 2,
+        "signal_sell": 2,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R3_WideSL_SlowTP",
+      "symbol": "ETH-USDT",
+      "strategy": "RSI_Boll",
+      "total_return": -5.157527269701604,
+      "max_drawdown": -7.809712406598555,
+      "sharpe_ratio": -1.271875220989356,
+      "win_rate": 50.0,
+      "total_trades": 6,
+      "final_equity": 9484.24727302984,
+      "stop_stats": {
+        "stop_loss": 3,
+        "take_profit": 0,
+        "trailing_stop": 0,
+        "signal_sell": 3,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R6_SlowMA_HighTrail",
+      "symbol": "BTC-USDT",
+      "strategy": "Breakout",
+      "total_return": -5.171841995737378,
+      "max_drawdown": -6.996587288532248,
+      "sharpe_ratio": -1.141866086229057,
+      "win_rate": 25.0,
+      "total_trades": 4,
+      "final_equity": 9482.815800426262,
+      "stop_stats": {
+        "stop_loss": 2,
+        "take_profit": 0,
+        "trailing_stop": 1,
+        "signal_sell": 0,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R9_NoTrailing_WideTP",
+      "symbol": "ETH-USDT",
+      "strategy": "Breakout",
+      "total_return": -5.259211598608418,
+      "max_drawdown": -7.924691276962554,
+      "sharpe_ratio": -0.8039697278601773,
+      "win_rate": 25.0,
+      "total_trades": 4,
+      "final_equity": 9474.078840139158,
+      "stop_stats": {
+        "stop_loss": 3,
+        "take_profit": 0,
+        "trailing_stop": 0,
+        "signal_sell": 0,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R2_TightSL_WideTP",
+      "symbol": "SOL-USDT",
+      "strategy": "Breakout",
+      "total_return": -5.5149839030964545,
+      "max_drawdown": -7.040100547689692,
+      "sharpe_ratio": -1.0536010562536082,
+      "win_rate": 28.57142857142857,
+      "total_trades": 7,
+      "final_equity": 9448.501609690355,
+      "stop_stats": {
+        "stop_loss": 2,
+        "take_profit": 0,
+        "trailing_stop": 5,
+        "signal_sell": 0,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R8_Aggressive",
+      "symbol": "SOL-USDT",
+      "strategy": "Breakout",
+      "total_return": -5.748102090946959,
+      "max_drawdown": -7.94481175006259,
+      "sharpe_ratio": -0.6997901894565088,
+      "win_rate": 33.33333333333333,
+      "total_trades": 6,
+      "final_equity": 9425.189790905304,
+      "stop_stats": {
+        "stop_loss": 1,
+        "take_profit": 0,
+        "trailing_stop": 5,
+        "signal_sell": 0,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R3_WideSL_SlowTP",
+      "symbol": "SOL-USDT",
+      "strategy": "Breakout",
+      "total_return": -5.786690413407432,
+      "max_drawdown": -6.960177478600031,
+      "sharpe_ratio": -1.0094753414317845,
+      "win_rate": 0.0,
+      "total_trades": 5,
+      "final_equity": 9421.330958659257,
+      "stop_stats": {
+        "stop_loss": 1,
+        "take_profit": 0,
+        "trailing_stop": 4,
+        "signal_sell": 0,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R2_TightSL_WideTP",
+      "symbol": "ETH-USDT",
+      "strategy": "Breakout",
+      "total_return": -5.791986936670527,
+      "max_drawdown": -8.508849361177354,
+      "sharpe_ratio": -1.2014522099900122,
+      "win_rate": 28.57142857142857,
+      "total_trades": 7,
+      "final_equity": 9420.801306332947,
+      "stop_stats": {
+        "stop_loss": 3,
+        "take_profit": 0,
+        "trailing_stop": 3,
+        "signal_sell": 0,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R8_Aggressive",
+      "symbol": "ETH-USDT",
+      "strategy": "Breakout",
+      "total_return": -5.816370011944237,
+      "max_drawdown": -10.159842170514112,
+      "sharpe_ratio": -0.7379848541600189,
+      "win_rate": 33.33333333333333,
+      "total_trades": 6,
+      "final_equity": 9418.362998805576,
+      "stop_stats": {
+        "stop_loss": 1,
+        "take_profit": 0,
+        "trailing_stop": 4,
+        "signal_sell": 0,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R6_SlowMA_HighTrail",
+      "symbol": "ETH-USDT",
+      "strategy": "Breakout",
+      "total_return": -6.854979173692227,
+      "max_drawdown": -7.330424700448857,
+      "sharpe_ratio": -1.8086065344823465,
+      "win_rate": 0.0,
+      "total_trades": 4,
+      "final_equity": 9314.502082630777,
+      "stop_stats": {
+        "stop_loss": 3,
+        "take_profit": 0,
+        "trailing_stop": 0,
+        "signal_sell": 0,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R5_FastMA",
+      "symbol": "ETH-USDT",
+      "strategy": "Breakout",
+      "total_return": -7.057821492128478,
+      "max_drawdown": -8.849387955974926,
+      "sharpe_ratio": -1.0196162546831284,
+      "win_rate": 44.44444444444444,
+      "total_trades": 9,
+      "final_equity": 9294.217850787152,
+      "stop_stats": {
+        "stop_loss": 4,
+        "take_profit": 0,
+        "trailing_stop": 4,
+        "signal_sell": 0,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R8_Aggressive",
+      "symbol": "BTC-USDT",
+      "strategy": "RSI_Boll",
+      "total_return": -7.323322412614271,
+      "max_drawdown": -10.588723742363754,
+      "sharpe_ratio": -1.1317601833134052,
+      "win_rate": 44.44444444444444,
+      "total_trades": 9,
+      "final_equity": 9267.667758738573,
+      "stop_stats": {
+        "stop_loss": 4,
+        "take_profit": 0,
+        "trailing_stop": 2,
+        "signal_sell": 3,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R8_Aggressive",
+      "symbol": "SOL-USDT",
+      "strategy": "RSI_Boll",
+      "total_return": -7.379865103238098,
+      "max_drawdown": -10.962583004870686,
+      "sharpe_ratio": -1.3741818329863658,
+      "win_rate": 33.33333333333333,
+      "total_trades": 6,
+      "final_equity": 9262.01348967619,
+      "stop_stats": {
+        "stop_loss": 3,
+        "take_profit": 0,
+        "trailing_stop": 1,
+        "signal_sell": 2,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R6_SlowMA_HighTrail",
+      "symbol": "SOL-USDT",
+      "strategy": "Breakout",
+      "total_return": -7.39959574587956,
+      "max_drawdown": -8.46944393708932,
+      "sharpe_ratio": -1.8570814724184852,
+      "win_rate": 0.0,
+      "total_trades": 4,
+      "final_equity": 9260.040425412044,
+      "stop_stats": {
+        "stop_loss": 3,
+        "take_profit": 0,
+        "trailing_stop": 1,
+        "signal_sell": 0,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R9_NoTrailing_WideTP",
+      "symbol": "BTC-USDT",
+      "strategy": "Breakout",
+      "total_return": -8.376058396933876,
+      "max_drawdown": -11.828850866096213,
+      "sharpe_ratio": -1.3841661510528895,
+      "win_rate": 0.0,
+      "total_trades": 4,
+      "final_equity": 9162.394160306612,
+      "stop_stats": {
+        "stop_loss": 3,
+        "take_profit": 0,
+        "trailing_stop": 0,
+        "signal_sell": 0,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R8_Aggressive",
+      "symbol": "ETH-USDT",
+      "strategy": "RSI_Boll",
+      "total_return": -8.45263977999015,
+      "max_drawdown": -11.778893748493138,
+      "sharpe_ratio": -1.3760596184643232,
+      "win_rate": 37.5,
+      "total_trades": 8,
+      "final_equity": 9154.736022000985,
+      "stop_stats": {
+        "stop_loss": 4,
+        "take_profit": 0,
+        "trailing_stop": 2,
+        "signal_sell": 2,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R5_FastMA",
+      "symbol": "SOL-USDT",
+      "strategy": "Breakout",
+      "total_return": -8.561254467981216,
+      "max_drawdown": -8.584678666092833,
+      "sharpe_ratio": -1.3682089022492818,
+      "win_rate": 22.22222222222222,
+      "total_trades": 9,
+      "final_equity": 9143.874553201878,
+      "stop_stats": {
+        "stop_loss": 4,
+        "take_profit": 0,
+        "trailing_stop": 5,
+        "signal_sell": 0,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    },
+    {
+      "round": "R9_NoTrailing_WideTP",
+      "symbol": "SOL-USDT",
+      "strategy": "Breakout",
+      "total_return": -9.630528585822832,
+      "max_drawdown": -11.075857210600981,
+      "sharpe_ratio": -1.5785020066408548,
+      "win_rate": 0.0,
+      "total_trades": 5,
+      "final_equity": 9036.947141417717,
+      "stop_stats": {
+        "stop_loss": 5,
+        "take_profit": 0,
+        "trailing_stop": 0,
+        "signal_sell": 0,
+        "fixed_sl": 0,
+        "fixed_tp": 0
+      },
+      "mtf_blocked": 0
+    }
+  ],
+  "top10": [
+    {
+      "rank": 1,
+      "round": "R9_NoTrailing_WideTP",
+      "symbol": "ETH-USDT",
+      "strategy": "MACD",
+      "total_return": 1.9052355977199478,
+      "max_drawdown": -3.938087215981173,
+      "sharpe_ratio": 0.4345210724152133,
+      "win_rate": 50.0,
+      "total_trades": 6
+    },
+    {
+      "rank": 2,
+      "round": "R3_WideSL_SlowTP",
+      "symbol": "BTC-USDT",
+      "strategy": "Breakout",
+      "total_return": 1.2990530934653723,
+      "max_drawdown": -5.978075506843279,
+      "sharpe_ratio": 0.2905261242546418,
+      "win_rate": 33.33333333333333,
+      "total_trades": 3
+    },
+    {
+      "rank": 3,
+      "round": "R8_Aggressive",
+      "symbol": "BTC-USDT",
+      "strategy": "MACD",
+      "total_return": 1.0650342870112217,
+      "max_drawdown": -3.2494727040378555,
+      "sharpe_ratio": 0.2032045847192321,
+      "win_rate": 40.0,
+      "total_trades": 5
+    },
+    {
+      "rank": 4,
+      "round": "R9_NoTrailing_WideTP",
+      "symbol": "BTC-USDT",
+      "strategy": "MACD",
+      "total_return": 0.7350911866318893,
+      "max_drawdown": -2.3649932848280883,
+      "sharpe_ratio": 0.19586654891519134,
+      "win_rate": 40.0,
+      "total_trades": 5
+    },
+    {
+      "rank": 5,
+      "round": "R5_FastMA",
+      "symbol": "BTC-USDT",
+      "strategy": "DoubleMA",
+      "total_return": 0.733370654127757,
+      "max_drawdown": -3.7645706061474464,
+      "sharpe_ratio": 0.2324910631572568,
+      "win_rate": 50.0,
+      "total_trades": 4
+    },
+    {
+      "rank": 6,
+      "round": "R1_Baseline",
+      "symbol": "BTC-USDT",
+      "strategy": "MACD",
+      "total_return": 0.7220415338530983,
+      "max_drawdown": -2.188793544541557,
+      "sharpe_ratio": 0.1930110185196207,
+      "win_rate": 40.0,
+      "total_trades": 5
+    },
+    {
+      "rank": 7,
+      "round": "R3_WideSL_SlowTP",
+      "symbol": "BTC-USDT",
+      "strategy": "MACD",
+      "total_return": 0.7220415338530983,
+      "max_drawdown": -2.188793544541557,
+      "sharpe_ratio": 0.1930110185196207,
+      "win_rate": 40.0,
+      "total_trades": 5
+    },
+    {
+      "rank": 8,
+      "round": "R5_FastMA",
+      "symbol": "BTC-USDT",
+      "strategy": "MACD",
+      "total_return": 0.7220415338530983,
+      "max_drawdown": -2.188793544541557,
+      "sharpe_ratio": 0.1930110185196207,
+      "win_rate": 40.0,
+      "total_trades": 5
+    },
+    {
+      "rank": 9,
+      "round": "R6_SlowMA_HighTrail",
+      "symbol": "BTC-USDT",
+      "strategy": "MACD",
+      "total_return": 0.7220415338530983,
+      "max_drawdown": -2.188793544541557,
+      "sharpe_ratio": 0.1930110185196207,
+      "win_rate": 40.0,
+      "total_trades": 5
+    },
+    {
+      "rank": 10,
+      "round": "R3_WideSL_SlowTP",
+      "symbol": "ETH-USDT",
+      "strategy": "MACD",
+      "total_return": 0.6279753359475216,
+      "max_drawdown": -3.1717188661835904,
+      "sharpe_ratio": 0.16290210491158136,
+      "win_rate": 33.33333333333333,
+      "total_trades": 6
+    }
+  ]
+}
