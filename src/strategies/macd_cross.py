@@ -4,7 +4,7 @@ MACD 交叉策略（趋势跟随）
 """
 
 from typing import Dict, Optional
-from .base import BaseStrategy, Signal, SignalType
+from .base import BaseStrategy, Signal, SignalType, PositionSide
 from src.utils.indicators import MACD
 
 
@@ -77,15 +77,23 @@ class MACDCrossStrategy(BaseStrategy):
         signal = Signal(SignalType.HOLD, self.instId, price, 0, timestamp,
                         f"MACD={macd_line:.2f}, Signal={signal_line:.2f}")
 
-        if golden and not self.position:
-            signal.signal_type = SignalType.BUY
+        if golden:
+            # 金叉：开多（若已持空，引擎自动翻转平空开多）
+            signal.signal_type = SignalType.OPEN_LONG
             signal.amount = self.calculate_position_size(self.account_balance, price)
             signal.reason = f"MACD金叉: {macd_line:.2f} > {signal_line:.2f}"
 
-        elif death and self.position:
-            signal.signal_type = SignalType.SELL
-            signal.amount = self.position.amount
-            signal.reason = f"MACD死叉: {macd_line:.2f} < {signal_line:.2f}"
+        elif death:
+            if self.allow_short:
+                # 死叉：开空（若已持多，引擎自动翻转平多开空）
+                signal.signal_type = SignalType.OPEN_SHORT
+                signal.amount = self.calculate_position_size(self.account_balance, price)
+                signal.reason = f"MACD死叉做空: {macd_line:.2f} < {signal_line:.2f}"
+            elif self.position and self.position.side == PositionSide.LONG:
+                # 不允许做空时，死叉仅平多
+                signal.signal_type = SignalType.CLOSE_LONG
+                signal.amount = self.position.amount
+                signal.reason = f"MACD死叉平多: {macd_line:.2f} < {signal_line:.2f}"
 
         if self.position:
             self.position.update_price(price)

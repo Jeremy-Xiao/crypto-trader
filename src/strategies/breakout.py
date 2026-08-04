@@ -4,7 +4,7 @@
 """
 
 from typing import Dict, Optional
-from .base import BaseStrategy, Signal, SignalType
+from .base import BaseStrategy, Signal, SignalType, PositionSide
 
 
 class BreakoutStrategy(BaseStrategy):
@@ -47,17 +47,29 @@ class BreakoutStrategy(BaseStrategy):
 
         prices = self.price_history
 
-        # 过去 lookback 根K线的最高价（不含当前K线）
+        # 过去 lookback 根K线的最高/最低价（不含当前K线）
         recent_high = max(prices[-lookback-1:-1])
+        recent_low = min(prices[-lookback-1:-1])
 
         signal = Signal(SignalType.HOLD, self.instId, price, 0, timestamp,
-                        f"突破位={recent_high:.0f}, 当前={price:.0f}")
+                        f"突破位={recent_high:.0f}/{recent_low:.0f}, 当前={price:.0f}")
 
-        # 突破买入
-        if price > recent_high and not self.position:
-            signal.signal_type = SignalType.BUY
+        # 向上突破 → 开多（若已持空，引擎自动翻转平空开多）
+        if price > recent_high and (not self.position or self.position.side == PositionSide.SHORT):
+            signal.signal_type = SignalType.OPEN_LONG
             signal.amount = self.calculate_position_size(self.account_balance, price)
             signal.reason = f"突破{lookback}日高点: {price:.0f} > {recent_high:.0f}"
+
+        # 向下突破 → 开空（允许做空时）；不允许做空且持多时平多
+        elif price < recent_low:
+            if self.allow_short:
+                signal.signal_type = SignalType.OPEN_SHORT
+                signal.amount = self.calculate_position_size(self.account_balance, price)
+                signal.reason = f"跌破{lookback}日低点: {price:.0f} < {recent_low:.0f}"
+            elif self.position and self.position.side == PositionSide.LONG:
+                signal.signal_type = SignalType.CLOSE_LONG
+                signal.amount = self.position.amount
+                signal.reason = f"跌破{lookback}日低点平多: {price:.0f} < {recent_low:.0f}"
 
         # 突破策略无额外卖出条件，由引擎 ATR 止损止盈管理
         if self.position:

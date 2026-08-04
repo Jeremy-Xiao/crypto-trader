@@ -4,7 +4,7 @@ RSI + 布林带策略（均值回归，适用于震荡市）
 """
 
 from typing import Dict, Optional
-from .base import BaseStrategy, Signal, SignalType
+from .base import BaseStrategy, Signal, SignalType, PositionSide
 from src.utils.indicators import RSI, BollingerBands
 
 
@@ -70,22 +70,28 @@ class RSIBollingerStrategy(BaseStrategy):
         signal = Signal(SignalType.HOLD, self.instId, price, 0, timestamp,
                         f"RSI={rsi:.1f}, BB下={lower:.0f}, BB上={upper:.0f}")
 
-        # 买入：RSI 超卖 + 价格触及布林带下轨
-        if rsi < self.params["rsi_low"] and price <= lower and not self.position:
-            signal.signal_type = SignalType.BUY
-            signal.amount = self.calculate_position_size(self.account_balance, price)
-            signal.reason = f"超卖: RSI={rsi:.1f}<{self.params['rsi_low']}, 价格触下轨"
-
-        # 卖出：RSI 超买 + 价格触及布林带上轨
-        elif self.position:
-            if rsi > self.params["rsi_high"] and price >= upper:
-                signal.signal_type = SignalType.SELL
-                signal.amount = self.position.amount
-                signal.reason = f"超买: RSI={rsi:.1f}>{self.params['rsi_high']}, 价格触上轨"
-            elif price >= middle:
-                signal.signal_type = SignalType.SELL
-                signal.amount = self.position.amount
-                signal.reason = "回归中轨"
+        if not self.position:
+            # 无持仓：超卖开多，超买开空
+            if rsi < self.params["rsi_low"] and price <= lower:
+                signal.signal_type = SignalType.OPEN_LONG
+                signal.amount = self.calculate_position_size(self.account_balance, price)
+                signal.reason = f"超卖开多: RSI={rsi:.1f}<{self.params['rsi_low']}, 价格触下轨"
+            elif self.allow_short and rsi > self.params["rsi_high"] and price >= upper:
+                signal.signal_type = SignalType.OPEN_SHORT
+                signal.amount = self.calculate_position_size(self.account_balance, price)
+                signal.reason = f"超买开空: RSI={rsi:.1f}>{self.params['rsi_high']}, 价格触上轨"
+        else:
+            # 有持仓：回归中轨或反向极端 → 平仓
+            if self.position.side == PositionSide.LONG:
+                if rsi > self.params["rsi_high"] or price >= upper or price >= middle:
+                    signal.signal_type = SignalType.CLOSE_LONG
+                    signal.amount = self.position.amount
+                    signal.reason = "多头回归平仓"
+            else:  # SHORT
+                if rsi < self.params["rsi_low"] or price <= lower or price <= middle:
+                    signal.signal_type = SignalType.CLOSE_SHORT
+                    signal.amount = self.position.amount
+                    signal.reason = "空头回归平仓"
 
         if self.position:
             self.position.update_price(price)

@@ -74,6 +74,7 @@ class BacktestEngine:
         self.equity_curve: List[Dict] = []
         self.position_amount = 0.0
         self.position_price = 0.0
+        self.position_side = PositionSide.NONE  # 持仓方向（支持做空）
 
         # 统计
         self.stop_stats = {
@@ -128,12 +129,12 @@ class BacktestEngine:
             else:
                 self.regime_history.append("unknown")
 
-            # ====== 引擎层：持仓时优先检查退出条件 ======
-            if self.position_amount > 0 and self.strategy.position:
+            # ====== 引擎层：持仓时优先检查退出条件（止损/止盈/移动止损）======
+            if self.position_side != PositionSide.NONE:
                 exit_reason = self._check_exit_conditions(price, high, low, timestamp)
 
                 if exit_reason:
-                    self._execute_sell(price, timestamp, exit_reason)
+                    self._close_current_position(price, timestamp, exit_reason)
                     self._record_equity(price, timestamp)
                     continue
 
@@ -144,32 +145,46 @@ class BacktestEngine:
                 "low": low,
                 "timestamp": timestamp
             })
+            st = signal.signal_type
 
-            # 执行交易
-            if signal.signal_type == SignalType.BUY and self.position_amount == 0:
-                # 多时间框架确认
+            # 出场信号（平多 / 平空）
+            if st in (SignalType.CLOSE_LONG, SignalType.CLOSE_SHORT):
+                if self.position_side != PositionSide.NONE:
+                    self._close_current_position(price, timestamp, st.value)
+                    self._record_equity(price, timestamp)
+                    continue
+
+            # 入场信号（开多 / 开空，支持翻转）
+            elif st in (SignalType.OPEN_LONG, SignalType.OPEN_SHORT):
+                target = PositionSide.LONG if st == SignalType.OPEN_LONG else PositionSide.SHORT
+
+                # 多时间框架确认（仅对开多/开空方向有效）
                 if self.config.use_mtf and self.config.tf_confirm:
                     data_idx = len(self.strategy.price_history) - 1
-                    if data_idx < len(self.config.tf_confirm):
-                        if not self.config.tf_confirm[data_idx]:
-                            self.mtf_blocked += 1
-                            self._record_equity(price, timestamp)
-                            continue
+                    if data_idx < len(self.config.tf_confirm) and not self.config.tf_confirm[data_idx]:
+                        self.mtf_blocked += 1
+                        self._record_equity(price, timestamp)
+                        continue
 
-                self._execute_buy(price, signal.amount, timestamp, signal.reason)
+                if self.position_side == PositionSide.NONE:
+                    self._open_position(target, price, signal.amount, timestamp, signal.reason)
+                elif self.position_side == target:
+                    pass  # 已持有同向，忽略
+                else:
+                    # 反向信号 → 先平后开（翻转）
+                    self._close_current_position(price, timestamp, "reverse")
+                    self._open_position(target, price, signal.amount, timestamp, signal.reason)
 
-            elif signal.signal_type == SignalType.SELL and self.position_amount > 0:
-                self._execute_sell(price, timestamp, signal.reason or "signal_sell")
-                self.stop_stats['signal_sell'] += 1
+            # HOLD：不动作
 
             self._record_equity(price, timestamp)
 
         # 强制平仓
-        if self.position_amount > 0:
+        if self.position_side != PositionSide.NONE:
             last_row = self.data.iloc[-1]
             last_price = float(last_row["close"])
             last_ts = last_row.get("timestamp", last_row.get("ts", ""))
-            self._execute_sell(last_price, last_ts, "end_of_backtest")
+            self._close_current_position(last_price, last_ts, "end_of_backtest")
 
         # 计算绩效
         results = self._calculate_performance()
@@ -194,46 +209,52 @@ class BacktestEngine:
 
     def _check_exit_conditions(self, price: float, high: float, low: float, timestamp: str) -> Optional[str]:
         """
-        检查退出条件（引擎层优先于策略层）
+        检查退出条件（引擎层优先于策略层，支持双向）
 
         优先级：
-        1. ATR 动态止损/止盈（如果启用）
-        2. 移动止损（如果启用）
-        3. 固定止损/止盈（兼容旧策略）
+        1. ATR 动态止损/止盈（如果启用，按持仓方向计算）
+        2. 移动止损（如果启用，按持仓方向计算）
+        3. 固定止损/止盈（兼容旧策略，should_* 已双向）
         """
+        pos = self.strategy.position
+        if pos is None:
+            return None
+
         if self.config.use_atr_risk:
             atr_val = self.strategy.get_atr(self.config.atr_period)
 
             if atr_val > 0:
-                # 更新持仓价格
-                self.strategy.position.update_price(price)
+                pos.update_price(price)
+                entry = pos.entry_price
+                sl = self.config.atr_sl_multiplier
+                tp = self.config.atr_tp_multiplier
 
-                # 移动止损
                 if self.config.use_trailing:
                     trailing_reason = self.strategy.update_trailing_stop(
-                        price, atr_val,
-                        self.config.atr_sl_multiplier,
-                        self.config.trailing_pct
+                        price, atr_val, sl, self.config.trailing_pct
                     )
                     if trailing_reason:
                         self.stop_stats['trailing_stop'] += 1
                         return trailing_reason
 
-                # ATR 止损
-                stop_price = self.strategy.position.entry_price - atr_val * self.config.atr_sl_multiplier
-                if price <= stop_price:
-                    self.stop_stats['stop_loss'] += 1
-                    return 'stop_loss'
-
-                # ATR 止盈
-                tp_price = self.strategy.position.entry_price + atr_val * self.config.atr_tp_multiplier
-                if price >= tp_price:
-                    self.stop_stats['take_profit'] += 1
-                    return 'take_profit'
+                if pos.side == PositionSide.LONG:
+                    if price <= entry - atr_val * sl:
+                        self.stop_stats['stop_loss'] += 1
+                        return 'stop_loss'
+                    if price >= entry + atr_val * tp:
+                        self.stop_stats['take_profit'] += 1
+                        return 'take_profit'
+                else:  # SHORT
+                    if price >= entry + atr_val * sl:   # 价格上涨 → 空头亏损
+                        self.stop_stats['stop_loss'] += 1
+                        return 'stop_loss'
+                    if price <= entry - atr_val * tp:   # 价格下跌 → 空头盈利
+                        self.stop_stats['take_profit'] += 1
+                        return 'take_profit'
 
                 return None  # ATR 风控启用但未触发
 
-        # 固定止损止盈（兼容旧逻辑）
+        # 固定止损止盈（兼容旧逻辑，should_* 已双向支持）
         if self.strategy.should_stop_loss(price):
             self.stop_stats['fixed_sl'] += 1
             return 'fixed_stop_loss'
@@ -258,16 +279,9 @@ class BacktestEngine:
         return float(val) if not pd.isna(val) else 0.0
 
     def _execute_buy(self, price: float, amount: float, timestamp: str, reason: str):
-        """执行买入"""
+        """执行买入开多"""
         if self.position_amount > 0:
             return
-
-        # ADX 入场过滤：震荡市（ADX 过低）禁止入场，避免反复被扫损
-        if self.config.min_adx_for_entry > 0:
-            adx_now = self._current_adx()
-            if adx_now < self.config.min_adx_for_entry:
-                self.adx_blocked += 1
-                return
 
         actual_price = price * (1 + self.config.slippage)
 
@@ -303,8 +317,79 @@ class BacktestEngine:
             "reason": reason
         })
 
+    def _open_position(self, side: PositionSide, price: float, amount: float, timestamp: str, reason: str):
+        """开仓（多或空），含 ADX 入场过滤"""
+        if self.position_side != PositionSide.NONE:
+            return
+        # ADX 入场过滤：震荡市（ADX 过低）禁止入场，多空都适用
+        if self.config.min_adx_for_entry > 0:
+            adx_now = self._current_adx()
+            if adx_now < self.config.min_adx_for_entry:
+                self.adx_blocked += 1
+                return
+        if side == PositionSide.LONG:
+            self._execute_buy(price, amount, timestamp, reason)
+        else:
+            self._execute_open_short(price, amount, timestamp, reason)
+        self.position_side = side
+
+    def _execute_open_short(self, price: float, amount: float, timestamp: str, reason: str):
+        """执行卖出开空（做空）"""
+        if self.position_amount > 0:
+            return
+        actual_price = price * (1 - self.config.slippage)  # 做空卖出，滑点不利方向→成交价略低
+        sell_value = amount * actual_price
+        fee = sell_value * self.config.fee_rate
+        self.balance += (sell_value - fee)                # 收到现金，同时背负 amount 币的负债
+        self.position_amount = amount
+        self.position_price = actual_price
+        self.strategy.open_position(actual_price, amount, timestamp, side=PositionSide.SHORT)
+        self.trades.append({
+            "timestamp": timestamp,
+            "instId": self.strategy.instId,
+            "action": "sell",
+            "side": "short_open",
+            "price": actual_price,
+            "amount": amount,
+            "fee": fee,
+            "pnl": 0,
+            "reason": reason
+        })
+
+    def _execute_buy_to_cover(self, price: float, timestamp: str, reason: str):
+        """执行买入平空（买回还债）"""
+        if self.position_amount <= 0:
+            return
+        actual_price = price * (1 + self.config.slippage)  # 买回，滑点不利方向→成交价略高
+        buy_value = self.position_amount * actual_price
+        fee = buy_value * self.config.fee_rate
+        pnl = (self.position_price - actual_price) * self.position_amount  # 空头盈利 = 开仓价 - 平仓价
+        self.balance -= (buy_value + fee)
+        self.strategy.close_position(actual_price, timestamp, reason)
+        self.trades.append({
+            "timestamp": timestamp,
+            "instId": self.strategy.instId,
+            "action": "buy",
+            "side": "short_close",
+            "price": actual_price,
+            "amount": self.position_amount,
+            "fee": fee,
+            "pnl": pnl,
+            "reason": reason
+        })
+        self.position_amount = 0.0
+        self.position_price = 0.0
+
+    def _close_current_position(self, price: float, timestamp: str, reason: str):
+        """平掉当前持仓（按方向自动选平多/平空）"""
+        if self.position_side == PositionSide.LONG:
+            self._execute_sell(price, timestamp, reason)
+        elif self.position_side == PositionSide.SHORT:
+            self._execute_buy_to_cover(price, timestamp, reason)
+        self.position_side = PositionSide.NONE
+
     def _execute_sell(self, price: float, timestamp: str, reason: str):
-        """执行卖出"""
+        """执行卖出平多"""
         if self.position_amount <= 0:
             return
 
@@ -332,13 +417,17 @@ class BacktestEngine:
         self.position_price = 0.0
 
     def _record_equity(self, price: float, timestamp: str):
-        """记录权益曲线"""
-        equity = self.balance + self.position_amount * price
+        """记录权益曲线（空头持仓的市值记为负数）"""
+        if self.position_side == PositionSide.SHORT:
+            pos_value = -self.position_amount * price
+        else:
+            pos_value = self.position_amount * price
+        equity = self.balance + pos_value
         self.equity_curve.append({
             "timestamp": timestamp,
             "equity": equity,
             "balance": self.balance,
-            "position_value": self.position_amount * price,
+            "position_value": pos_value,
             "price": price
         })
 

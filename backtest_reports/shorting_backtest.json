@@ -1,0 +1,613 @@
+{
+  "date": "2026-08-05T02:25:57.273634",
+  "window_days": 365,
+  "engine_config": {
+    "min_adx": 30.0,
+    "max_pos_pct": 1.0,
+    "use_trailing": false,
+    "use_atr": true
+  },
+  "benchmarks": {
+    "money_market": 4.5,
+    "buy_and_hold": {
+      "BTC-USDT": -44.26328366381842,
+      "ETH-USDT": -48.733222186143344,
+      "SOL-USDT": -56.04850635906538,
+      "PORTFOLIO_EW": -49.681670736342376
+    }
+  },
+  "summary": {
+    "long_only_avg": -2.9,
+    "long_only_profitable": 2,
+    "bidirectional_avg": -0.09,
+    "bidirectional_profitable": 6,
+    "short_delta_avg": 2.81,
+    "buy_hold_portfolio": -49.68,
+    "money_market": 4.5
+  },
+  "pair_comparison": [
+    {
+      "symbol": "BTC-USDT",
+      "strategy": "DoubleMA",
+      "long_only": 0.0,
+      "bidirectional": 4.977085841334047,
+      "delta": 4.977085841334047,
+      "lo_trades": 0,
+      "bi_trades": 1,
+      "bi_short_trades": 1
+    },
+    {
+      "symbol": "BTC-USDT",
+      "strategy": "MACD",
+      "long_only": -0.6456860773363223,
+      "bidirectional": -0.7887765187638252,
+      "delta": -0.14309044142750282,
+      "lo_trades": 6,
+      "bi_trades": 11,
+      "bi_short_trades": 1
+    },
+    {
+      "symbol": "BTC-USDT",
+      "strategy": "Breakout",
+      "long_only": -13.469289318164773,
+      "bidirectional": -10.180403245695178,
+      "delta": 3.2888860724695945,
+      "lo_trades": 3,
+      "bi_trades": 7,
+      "bi_short_trades": 2
+    },
+    {
+      "symbol": "BTC-USDT",
+      "strategy": "RSI_Boll",
+      "long_only": 0.9942867675920206,
+      "bidirectional": 3.069612699731515,
+      "delta": 2.075325932139495,
+      "lo_trades": 4,
+      "bi_trades": 6,
+      "bi_short_trades": 1
+    },
+    {
+      "symbol": "ETH-USDT",
+      "strategy": "DoubleMA",
+      "long_only": 0.0,
+      "bidirectional": 5.705302953013797,
+      "delta": 5.705302953013797,
+      "lo_trades": 0,
+      "bi_trades": 1,
+      "bi_short_trades": 1
+    },
+    {
+      "symbol": "ETH-USDT",
+      "strategy": "MACD",
+      "long_only": 1.1342594353140338,
+      "bidirectional": 5.316391789496029,
+      "delta": 4.182132354181995,
+      "lo_trades": 4,
+      "bi_trades": 5,
+      "bi_short_trades": 1
+    },
+    {
+      "symbol": "ETH-USDT",
+      "strategy": "Breakout",
+      "long_only": -1.1836410049829829,
+      "bidirectional": 2.449487900402273,
+      "delta": 3.633128905385256,
+      "lo_trades": 2,
+      "bi_trades": 6,
+      "bi_short_trades": 2
+    },
+    {
+      "symbol": "ETH-USDT",
+      "strategy": "RSI_Boll",
+      "long_only": -6.929011758973956,
+      "bidirectional": -4.252105427269708,
+      "delta": 2.676906331704248,
+      "lo_trades": 5,
+      "bi_trades": 7,
+      "bi_short_trades": 3
+    },
+    {
+      "symbol": "SOL-USDT",
+      "strategy": "DoubleMA",
+      "long_only": 0.0,
+      "bidirectional": -2.3822059147180155,
+      "delta": -2.3822059147180155,
+      "lo_trades": 0,
+      "bi_trades": 1,
+      "bi_short_trades": 0
+    },
+    {
+      "symbol": "SOL-USDT",
+      "strategy": "MACD",
+      "long_only": -0.7402256140533245,
+      "bidirectional": 3.895108712304682,
+      "delta": 4.635334326358007,
+      "lo_trades": 4,
+      "bi_trades": 6,
+      "bi_short_trades": 1
+    },
+    {
+      "symbol": "SOL-USDT",
+      "strategy": "Breakout",
+      "long_only": -10.92698551754169,
+      "bidirectional": -8.495594306919283,
+      "delta": 2.4313912106224063,
+      "lo_trades": 4,
+      "bi_trades": 9,
+      "bi_short_trades": 2
+    },
+    {
+      "symbol": "SOL-USDT",
+      "strategy": "RSI_Boll",
+      "long_only": -3.007685114800352,
+      "bidirectional": -0.34821791607253544,
+      "delta": 2.6594671987278162,
+      "lo_trades": 4,
+      "bi_trades": 7,
+      "bi_short_trades": 2
+    }
+  ],
+  "all_results": {
+    "long_only": [
+      {
+        "symbol": "BTC-USDT",
+        "strategy": "DoubleMA",
+        "total_return": 0.0,
+        "max_drawdown": 0.0,
+        "sharpe_ratio": 0,
+        "win_rate": 0,
+        "total_trades": 0,
+        "final_equity": 10000.0,
+        "stop_stats": {
+          "stop_loss": 0,
+          "take_profit": 0,
+          "trailing_stop": 0,
+          "signal_sell": 0,
+          "fixed_sl": 0,
+          "fixed_tp": 0
+        }
+      },
+      {
+        "symbol": "BTC-USDT",
+        "strategy": "MACD",
+        "total_return": -0.6456860773363223,
+        "max_drawdown": -4.1110657010372185,
+        "sharpe_ratio": -0.06678308787165299,
+        "win_rate": 33.33333333333333,
+        "total_trades": 6,
+        "final_equity": 9935.431392266368,
+        "stop_stats": {
+          "stop_loss": 0,
+          "take_profit": 0,
+          "trailing_stop": 0,
+          "signal_sell": 0,
+          "fixed_sl": 0,
+          "fixed_tp": 0
+        }
+      },
+      {
+        "symbol": "BTC-USDT",
+        "strategy": "Breakout",
+        "total_return": -13.469289318164773,
+        "max_drawdown": -13.469289318164773,
+        "sharpe_ratio": -2.041084449812432,
+        "win_rate": 0.0,
+        "total_trades": 3,
+        "final_equity": 8653.071068183523,
+        "stop_stats": {
+          "stop_loss": 1,
+          "take_profit": 0,
+          "trailing_stop": 0,
+          "signal_sell": 0,
+          "fixed_sl": 0,
+          "fixed_tp": 0
+        }
+      },
+      {
+        "symbol": "BTC-USDT",
+        "strategy": "RSI_Boll",
+        "total_return": 0.9942867675920206,
+        "max_drawdown": -4.2248900464243375,
+        "sharpe_ratio": 0.23032475782122264,
+        "win_rate": 75.0,
+        "total_trades": 4,
+        "final_equity": 10099.428676759202,
+        "stop_stats": {
+          "stop_loss": 1,
+          "take_profit": 0,
+          "trailing_stop": 0,
+          "signal_sell": 0,
+          "fixed_sl": 0,
+          "fixed_tp": 0
+        }
+      },
+      {
+        "symbol": "ETH-USDT",
+        "strategy": "DoubleMA",
+        "total_return": 0.0,
+        "max_drawdown": 0.0,
+        "sharpe_ratio": 0,
+        "win_rate": 0,
+        "total_trades": 0,
+        "final_equity": 10000.0,
+        "stop_stats": {
+          "stop_loss": 0,
+          "take_profit": 0,
+          "trailing_stop": 0,
+          "signal_sell": 0,
+          "fixed_sl": 0,
+          "fixed_tp": 0
+        }
+      },
+      {
+        "symbol": "ETH-USDT",
+        "strategy": "MACD",
+        "total_return": 1.1342594353140338,
+        "max_drawdown": -4.240397552789774,
+        "sharpe_ratio": 0.2086981278615714,
+        "win_rate": 25.0,
+        "total_trades": 4,
+        "final_equity": 10113.425943531403,
+        "stop_stats": {
+          "stop_loss": 0,
+          "take_profit": 0,
+          "trailing_stop": 0,
+          "signal_sell": 0,
+          "fixed_sl": 0,
+          "fixed_tp": 0
+        }
+      },
+      {
+        "symbol": "ETH-USDT",
+        "strategy": "Breakout",
+        "total_return": -1.1836410049829829,
+        "max_drawdown": -5.986524518845839,
+        "sharpe_ratio": -0.1200866116836154,
+        "win_rate": 50.0,
+        "total_trades": 2,
+        "final_equity": 9881.635899501702,
+        "stop_stats": {
+          "stop_loss": 0,
+          "take_profit": 0,
+          "trailing_stop": 0,
+          "signal_sell": 0,
+          "fixed_sl": 0,
+          "fixed_tp": 0
+        }
+      },
+      {
+        "symbol": "ETH-USDT",
+        "strategy": "RSI_Boll",
+        "total_return": -6.929011758973956,
+        "max_drawdown": -10.891182424985663,
+        "sharpe_ratio": -1.2425593293456052,
+        "win_rate": 40.0,
+        "total_trades": 5,
+        "final_equity": 9307.098824102604,
+        "stop_stats": {
+          "stop_loss": 3,
+          "take_profit": 0,
+          "trailing_stop": 0,
+          "signal_sell": 0,
+          "fixed_sl": 0,
+          "fixed_tp": 0
+        }
+      },
+      {
+        "symbol": "SOL-USDT",
+        "strategy": "DoubleMA",
+        "total_return": 0.0,
+        "max_drawdown": 0.0,
+        "sharpe_ratio": 0,
+        "win_rate": 0,
+        "total_trades": 0,
+        "final_equity": 10000.0,
+        "stop_stats": {
+          "stop_loss": 0,
+          "take_profit": 0,
+          "trailing_stop": 0,
+          "signal_sell": 0,
+          "fixed_sl": 0,
+          "fixed_tp": 0
+        }
+      },
+      {
+        "symbol": "SOL-USDT",
+        "strategy": "MACD",
+        "total_return": -0.7402256140533245,
+        "max_drawdown": -4.883694456337221,
+        "sharpe_ratio": -0.07608810938340105,
+        "win_rate": 25.0,
+        "total_trades": 4,
+        "final_equity": 9925.977438594668,
+        "stop_stats": {
+          "stop_loss": 0,
+          "take_profit": 0,
+          "trailing_stop": 0,
+          "signal_sell": 0,
+          "fixed_sl": 0,
+          "fixed_tp": 0
+        }
+      },
+      {
+        "symbol": "SOL-USDT",
+        "strategy": "Breakout",
+        "total_return": -10.92698551754169,
+        "max_drawdown": -14.674977747258813,
+        "sharpe_ratio": -1.5155338072256663,
+        "win_rate": 0.0,
+        "total_trades": 4,
+        "final_equity": 8907.301448245831,
+        "stop_stats": {
+          "stop_loss": 1,
+          "take_profit": 0,
+          "trailing_stop": 0,
+          "signal_sell": 0,
+          "fixed_sl": 0,
+          "fixed_tp": 0
+        }
+      },
+      {
+        "symbol": "SOL-USDT",
+        "strategy": "RSI_Boll",
+        "total_return": -3.007685114800352,
+        "max_drawdown": -6.719648993817079,
+        "sharpe_ratio": -0.6496355531228573,
+        "win_rate": 50.0,
+        "total_trades": 4,
+        "final_equity": 9699.231488519965,
+        "stop_stats": {
+          "stop_loss": 2,
+          "take_profit": 0,
+          "trailing_stop": 0,
+          "signal_sell": 0,
+          "fixed_sl": 0,
+          "fixed_tp": 0
+        }
+      }
+    ],
+    "bidirectional": [
+      {
+        "symbol": "BTC-USDT",
+        "strategy": "DoubleMA",
+        "total_return": 4.977085841334047,
+        "max_drawdown": -1.4637488807400785,
+        "sharpe_ratio": 1.8932186946681269,
+        "win_rate": 0.0,
+        "total_trades": 1,
+        "final_equity": 10497.708584133405,
+        "stop_stats": {
+          "stop_loss": 0,
+          "take_profit": 1,
+          "trailing_stop": 0,
+          "signal_sell": 0,
+          "fixed_sl": 0,
+          "fixed_tp": 0
+        },
+        "adx_blocked": 9
+      },
+      {
+        "symbol": "BTC-USDT",
+        "strategy": "MACD",
+        "total_return": -0.7887765187638252,
+        "max_drawdown": -3.8617541205092287,
+        "sharpe_ratio": -0.08218773343127705,
+        "win_rate": 18.181818181818183,
+        "total_trades": 11,
+        "final_equity": 9921.122348123617,
+        "stop_stats": {
+          "stop_loss": 0,
+          "take_profit": 1,
+          "trailing_stop": 0,
+          "signal_sell": 0,
+          "fixed_sl": 0,
+          "fixed_tp": 0
+        },
+        "adx_blocked": 8
+      },
+      {
+        "symbol": "BTC-USDT",
+        "strategy": "Breakout",
+        "total_return": -10.180403245695178,
+        "max_drawdown": -10.841076970524773,
+        "sharpe_ratio": -1.1926708470555918,
+        "win_rate": 0.0,
+        "total_trades": 7,
+        "final_equity": 8981.959675430482,
+        "stop_stats": {
+          "stop_loss": 1,
+          "take_profit": 1,
+          "trailing_stop": 0,
+          "signal_sell": 0,
+          "fixed_sl": 0,
+          "fixed_tp": 0
+        },
+        "adx_blocked": 36
+      },
+      {
+        "symbol": "BTC-USDT",
+        "strategy": "RSI_Boll",
+        "total_return": 3.069612699731515,
+        "max_drawdown": -2.8695466656333055,
+        "sharpe_ratio": 0.6367794769543113,
+        "win_rate": 50.0,
+        "total_trades": 6,
+        "final_equity": 10306.961269973152,
+        "stop_stats": {
+          "stop_loss": 1,
+          "take_profit": 0,
+          "trailing_stop": 0,
+          "signal_sell": 0,
+          "fixed_sl": 0,
+          "fixed_tp": 0
+        },
+        "adx_blocked": 22
+      },
+      {
+        "symbol": "ETH-USDT",
+        "strategy": "DoubleMA",
+        "total_return": 5.705302953013797,
+        "max_drawdown": -0.591850509019676,
+        "sharpe_ratio": 2.326668418978711,
+        "win_rate": 0.0,
+        "total_trades": 1,
+        "final_equity": 10570.53029530138,
+        "stop_stats": {
+          "stop_loss": 0,
+          "take_profit": 1,
+          "trailing_stop": 0,
+          "signal_sell": 0,
+          "fixed_sl": 0,
+          "fixed_tp": 0
+        },
+        "adx_blocked": 7
+      },
+      {
+        "symbol": "ETH-USDT",
+        "strategy": "MACD",
+        "total_return": 5.316391789496029,
+        "max_drawdown": -4.240397552789774,
+        "sharpe_ratio": 0.8016985987630786,
+        "win_rate": 20.0,
+        "total_trades": 5,
+        "final_equity": 10531.639178949603,
+        "stop_stats": {
+          "stop_loss": 0,
+          "take_profit": 1,
+          "trailing_stop": 0,
+          "signal_sell": 0,
+          "fixed_sl": 0,
+          "fixed_tp": 0
+        },
+        "adx_blocked": 13
+      },
+      {
+        "symbol": "ETH-USDT",
+        "strategy": "Breakout",
+        "total_return": 2.449487900402273,
+        "max_drawdown": -6.351894225744478,
+        "sharpe_ratio": 0.28947084211408314,
+        "win_rate": 16.666666666666664,
+        "total_trades": 6,
+        "final_equity": 10244.948790040227,
+        "stop_stats": {
+          "stop_loss": 1,
+          "take_profit": 1,
+          "trailing_stop": 0,
+          "signal_sell": 0,
+          "fixed_sl": 0,
+          "fixed_tp": 0
+        },
+        "adx_blocked": 22
+      },
+      {
+        "symbol": "ETH-USDT",
+        "strategy": "RSI_Boll",
+        "total_return": -4.252105427269708,
+        "max_drawdown": -8.328235985011286,
+        "sharpe_ratio": -0.7028402093867806,
+        "win_rate": 28.57142857142857,
+        "total_trades": 7,
+        "final_equity": 9574.78945727303,
+        "stop_stats": {
+          "stop_loss": 3,
+          "take_profit": 0,
+          "trailing_stop": 0,
+          "signal_sell": 0,
+          "fixed_sl": 0,
+          "fixed_tp": 0
+        },
+        "adx_blocked": 16
+      },
+      {
+        "symbol": "SOL-USDT",
+        "strategy": "DoubleMA",
+        "total_return": -2.3822059147180155,
+        "max_drawdown": -2.3822059147180155,
+        "sharpe_ratio": -1.3683569106764855,
+        "win_rate": 0.0,
+        "total_trades": 1,
+        "final_equity": 9761.779408528198,
+        "stop_stats": {
+          "stop_loss": 0,
+          "take_profit": 0,
+          "trailing_stop": 0,
+          "signal_sell": 0,
+          "fixed_sl": 0,
+          "fixed_tp": 0
+        },
+        "adx_blocked": 12
+      },
+      {
+        "symbol": "SOL-USDT",
+        "strategy": "MACD",
+        "total_return": 3.895108712304682,
+        "max_drawdown": -7.331854352851861,
+        "sharpe_ratio": 0.5430953761278196,
+        "win_rate": 16.666666666666664,
+        "total_trades": 6,
+        "final_equity": 10389.510871230468,
+        "stop_stats": {
+          "stop_loss": 0,
+          "take_profit": 1,
+          "trailing_stop": 0,
+          "signal_sell": 0,
+          "fixed_sl": 0,
+          "fixed_tp": 0
+        },
+        "adx_blocked": 9
+      },
+      {
+        "symbol": "SOL-USDT",
+        "strategy": "Breakout",
+        "total_return": -8.495594306919283,
+        "max_drawdown": -13.14677974343942,
+        "sharpe_ratio": -0.7383195632156416,
+        "win_rate": 0.0,
+        "total_trades": 9,
+        "final_equity": 9150.440569308072,
+        "stop_stats": {
+          "stop_loss": 1,
+          "take_profit": 1,
+          "trailing_stop": 0,
+          "signal_sell": 0,
+          "fixed_sl": 0,
+          "fixed_tp": 0
+        },
+        "adx_blocked": 36
+      },
+      {
+        "symbol": "SOL-USDT",
+        "strategy": "RSI_Boll",
+        "total_return": -0.34821791607253544,
+        "max_drawdown": -6.474038644521431,
+        "sharpe_ratio": -0.0320993411958953,
+        "win_rate": 28.57142857142857,
+        "total_trades": 7,
+        "final_equity": 9965.178208392746,
+        "stop_stats": {
+          "stop_loss": 2,
+          "take_profit": 0,
+          "trailing_stop": 0,
+          "signal_sell": 0,
+          "fixed_sl": 0,
+          "fixed_tp": 0
+        },
+        "adx_blocked": 19
+      }
+    ]
+  },
+  "best_bidirectional": {
+    "symbol": "ETH-USDT",
+    "strategy": "DoubleMA",
+    "total_return": 5.705302953013797,
+    "max_drawdown": -0.591850509019676,
+    "sharpe_ratio": 2.326668418978711,
+    "total_trades": 1
+  },
+  "best_long_only": {
+    "symbol": "ETH-USDT",
+    "strategy": "MACD",
+    "total_return": 1.1342594353140338
+  }
+}

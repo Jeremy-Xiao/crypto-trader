@@ -4,7 +4,7 @@
 """
 
 from typing import Dict, Optional
-from .base import BaseStrategy, Signal, SignalType
+from .base import BaseStrategy, Signal, SignalType, PositionSide
 from src.utils.indicators import EMA
 
 
@@ -84,21 +84,26 @@ class DoubleMAStrategy(BaseStrategy):
         signal = Signal(SignalType.HOLD, self.instId, price, 0, timestamp,
                         f"EMA{fast_period}={fast_ma:.0f}, EMA{slow_period}={slow_ma:.0f}")
 
-        # 金叉买入（需趋势确认）
-        if golden_cross and not self.position and in_uptrend:
-            signal.signal_type = SignalType.BUY
+        # 金叉 + 趋势向上 → 开多（若已持空，引擎自动翻转平空开多）
+        if golden_cross and in_uptrend:
+            signal.signal_type = SignalType.OPEN_LONG
             signal.amount = self.calculate_position_size(self.account_balance, price)
             signal.reason = f"金叉: EMA{fast_period}({fast_ma:.0f}) > EMA{slow_period}({slow_ma:.0f})"
 
-        # 死叉卖出
-        elif death_cross and self.position:
-            signal.signal_type = SignalType.SELL
-            signal.amount = self.position.amount
-            signal.reason = f"死叉: EMA{fast_period}({fast_ma:.0f}) < EMA{slow_period}({slow_ma:.0f})"
+        # 死叉 → 开空（允许做空时）；不允许做空且持多时仅平多
+        elif death_cross:
+            if self.allow_short:
+                signal.signal_type = SignalType.OPEN_SHORT
+                signal.amount = self.calculate_position_size(self.account_balance, price)
+                signal.reason = f"死叉做空: EMA{fast_period}({fast_ma:.0f}) < EMA{slow_period}({slow_ma:.0f})"
+            elif self.position and self.position.side == PositionSide.LONG:
+                signal.signal_type = SignalType.CLOSE_LONG
+                signal.amount = self.position.amount
+                signal.reason = f"死叉平多: EMA{fast_period}({fast_ma:.0f}) < EMA{slow_period}({slow_ma:.0f})"
 
-        # 趋势破位卖出
-        elif self.position and not in_uptrend and len(prices) >= trend_period:
-            signal.signal_type = SignalType.SELL
+        # 持多且趋势破位 → 平多（持空时趋势破位是利好，不动）
+        elif self.position and self.position.side == PositionSide.LONG and not in_uptrend and len(prices) >= trend_period:
+            signal.signal_type = SignalType.CLOSE_LONG
             signal.amount = self.position.amount
             signal.reason = "趋势破位: 价格跌破趋势线"
 

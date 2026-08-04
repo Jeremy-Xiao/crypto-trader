@@ -14,10 +14,15 @@ from src.utils.indicators import ATR, ADX
 
 
 class SignalType(Enum):
-    """信号类型"""
-    BUY = "buy"
-    SELL = "sell"
+    """信号类型（支持双向交易：做多 / 做空）"""
     HOLD = "hold"
+    OPEN_LONG = "open_long"       # 买入开多
+    OPEN_SHORT = "open_short"     # 卖出开空（做空）
+    CLOSE_LONG = "close_long"     # 卖出平多
+    CLOSE_SHORT = "close_short"   # 买入平空
+    # 兼容别名（旧脚本仍可用 BUY / SELL）
+    BUY = OPEN_LONG
+    SELL = CLOSE_LONG
 
 
 class PositionSide(Enum):
@@ -67,6 +72,7 @@ class Position:
     unrealized_pnl_pct: float
     # 移动止损相关
     highest_price: float = 0.0
+    lowest_price: float = 0.0
     trailing_active: bool = False
     trailing_stop: float = 0.0
 
@@ -90,6 +96,7 @@ class Position:
             "unrealized_pnl": self.unrealized_pnl,
             "unrealized_pnl_pct": self.unrealized_pnl_pct,
             "highest_price": self.highest_price,
+            "lowest_price": self.lowest_price,
             "trailing_active": self.trailing_active,
             "trailing_stop": self.trailing_stop
         }
@@ -177,6 +184,9 @@ class BaseStrategy(ABC):
         self.trades: List[Dict] = []
         self.account_balance: float = 10000  # 由回测引擎更新
 
+        # 是否允许做空（双向交易）。默认开启；回测对比时设为 False 即模拟仅做多
+        self.allow_short = (params or {}).get("allow_short", True)
+
         # 历史数据缓存
         self.price_history: list = []
         self.high_history: list = []
@@ -256,20 +266,28 @@ class BaseStrategy(ABC):
         return amount
 
     def check_atr_stop_loss(self, atr_val: float, atr_sl_multiplier: float = 2.0) -> bool:
-        """ATR 动态止损检查"""
+        """ATR 动态止损检查（双向：多头看下破，空头看上破）"""
         if not self.position or atr_val <= 0:
             return False
 
-        stop_price = self.position.entry_price - atr_val * atr_sl_multiplier
-        return self.position.current_price <= stop_price
+        if self.position.side == PositionSide.LONG:
+            stop_price = self.position.entry_price - atr_val * atr_sl_multiplier
+            return self.position.current_price <= stop_price
+        else:  # SHORT
+            stop_price = self.position.entry_price + atr_val * atr_sl_multiplier
+            return self.position.current_price >= stop_price
 
     def check_atr_take_profit(self, atr_val: float, atr_tp_multiplier: float = 4.0) -> bool:
-        """ATR 动态止盈检查"""
+        """ATR 动态止盈检查（双向：多头看上破，空头看下破）"""
         if not self.position or atr_val <= 0:
             return False
 
-        tp_price = self.position.entry_price + atr_val * atr_tp_multiplier
-        return self.position.current_price >= tp_price
+        if self.position.side == PositionSide.LONG:
+            tp_price = self.position.entry_price + atr_val * atr_tp_multiplier
+            return self.position.current_price >= tp_price
+        else:  # SHORT
+            tp_price = self.position.entry_price - atr_val * atr_tp_multiplier
+            return self.position.current_price <= tp_price
 
     def update_trailing_stop(
         self,
@@ -279,12 +297,10 @@ class BaseStrategy(ABC):
         trailing_pct: float = 0.02
     ) -> Optional[str]:
         """
-        更新移动止损，返回触发原因或 None
+        更新移动止损（双向支持），返回触发原因或 None
 
-        逻辑：
-        1. 盈利达到 trailing_pct 后激活移动止损
-        2. 激活后，止损线 = 最高价 - ATR × atr_sl_multiplier
-        3. 止损线只上移不下移
+        多头：盈利达到 trailing_pct 后激活，止损线 = 最高价 - ATR × mult，只上移
+        空头：盈利达到 trailing_pct 后激活，止损线 = 最低价 + ATR × mult，只下移
 
         Returns:
             'trailing_stop' 如果触发移动止损，否则 None
@@ -293,21 +309,30 @@ class BaseStrategy(ABC):
             return None
 
         pos = self.position
-        pos.highest_price = max(pos.highest_price, current_price)
 
-        # 激活移动止损
-        if not pos.trailing_active:
-            if current_price >= pos.entry_price * (1 + trailing_pct):
-                pos.trailing_active = True
-                pos.trailing_stop = pos.highest_price - atr_val * atr_sl_multiplier
+        if pos.side == PositionSide.LONG:
+            pos.highest_price = max(pos.highest_price, current_price)
+            if not pos.trailing_active:
+                if current_price >= pos.entry_price * (1 + trailing_pct):
+                    pos.trailing_active = True
+                    pos.trailing_stop = pos.highest_price - atr_val * atr_sl_multiplier
+            if pos.trailing_active:
+                new_trail = pos.highest_price - atr_val * atr_sl_multiplier
+                pos.trailing_stop = max(pos.trailing_stop, new_trail)
+                if current_price <= pos.trailing_stop:
+                    return 'trailing_stop'
 
-        # 已激活，持续更新
-        if pos.trailing_active:
-            new_trail = pos.highest_price - atr_val * atr_sl_multiplier
-            pos.trailing_stop = max(pos.trailing_stop, new_trail)
-
-            if current_price <= pos.trailing_stop:
-                return 'trailing_stop'
+        else:  # SHORT
+            pos.lowest_price = min(pos.lowest_price, current_price)
+            if not pos.trailing_active:
+                if current_price <= pos.entry_price * (1 - trailing_pct):
+                    pos.trailing_active = True
+                    pos.trailing_stop = pos.lowest_price + atr_val * atr_sl_multiplier
+            if pos.trailing_active:
+                new_trail = pos.lowest_price + atr_val * atr_sl_multiplier
+                pos.trailing_stop = min(pos.trailing_stop, new_trail)  # 只下移
+                if current_price >= pos.trailing_stop:
+                    return 'trailing_stop'
 
         return None
 
@@ -352,6 +377,7 @@ class BaseStrategy(ABC):
             unrealized_pnl=0,
             unrealized_pnl_pct=0,
             highest_price=price,
+            lowest_price=price,
             trailing_active=False,
             trailing_stop=0.0
         )
