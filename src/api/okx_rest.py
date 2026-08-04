@@ -216,7 +216,8 @@ class OKXPublicAPI:
         self,
         instId: str,
         bar: str = "1H",
-        limit: int = 100
+        limit: int = 100,
+        after: Optional[str] = None
     ) -> Dict:
         """
         获取K线数据
@@ -225,12 +226,16 @@ class OKXPublicAPI:
             instId: 产品ID
             bar: K线周期 (1m/5m/15m/30m/1H/4H/1D/1W/1M)
             limit: 返回数量
+            after: 分页参数，传入上一页最后一根K线的时间戳(毫秒)，拉取更早的数据
         """
-        return self._public_request("/api/v5/market/candles", {
+        params = {
             "instId": instId,
             "bar": bar,
             "limit": str(limit)
-        })
+        }
+        if after is not None:
+            params["after"] = str(after)
+        return self._public_request("/api/v5/market/candles", params)
     
     def get_trades(self, instId: str, limit: int = 100) -> Dict:
         """

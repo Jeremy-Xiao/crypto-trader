@@ -13,6 +13,7 @@ from src.strategies.base import (
     BaseStrategy, Signal, SignalType, PositionSide,
     MarketRegime, detect_market_regime
 )
+from src.utils.indicators import ADX
 
 
 @dataclass
@@ -41,6 +42,10 @@ class BacktestConfig:
 
     # 市场状态自适应
     use_regime: bool = True              # 启用市场状态检测
+
+    # 入场过滤（针对震荡市空耗的核心修复）
+    min_adx_for_entry: float = 0.0       # ADX 低于此值禁止入场（0=不限制）。趋势策略设为 20~25 可避免震荡市被反复扫损
+    max_position_pct: float = 0.5        # 单笔仓位上限（占账户比例），替代硬编码 0.5
 
 
 class BacktestEngine:
@@ -77,6 +82,7 @@ class BacktestEngine:
             'fixed_sl': 0, 'fixed_tp': 0
         }
         self.mtf_blocked = 0
+        self.adx_blocked = 0
         self.regime_history: List[str] = []
 
     def load_data(self, data: pd.DataFrame) -> None:
@@ -237,10 +243,31 @@ class BacktestEngine:
 
         return None
 
+    def _current_adx(self) -> float:
+        """计算当前 ADX（用于入场过滤）"""
+        n = len(self.strategy.price_history)
+        if n < 20:
+            return 0.0
+        adx_series = ADX(
+            pd.Series(self.strategy.high_history),
+            pd.Series(self.strategy.low_history),
+            pd.Series(self.strategy.price_history),
+            14
+        )
+        val = adx_series.iloc[-1]
+        return float(val) if not pd.isna(val) else 0.0
+
     def _execute_buy(self, price: float, amount: float, timestamp: str, reason: str):
         """执行买入"""
         if self.position_amount > 0:
             return
+
+        # ADX 入场过滤：震荡市（ADX 过低）禁止入场，避免反复被扫损
+        if self.config.min_adx_for_entry > 0:
+            adx_now = self._current_adx()
+            if adx_now < self.config.min_adx_for_entry:
+                self.adx_blocked += 1
+                return
 
         actual_price = price * (1 + self.config.slippage)
 
@@ -252,7 +279,7 @@ class BacktestEngine:
                     self.balance, actual_price, atr_val,
                     risk_pct=self.config.risk_pct,
                     atr_multiplier=self.config.atr_multiplier,
-                    max_pct=0.5
+                    max_pct=self.config.max_position_pct
                 )
 
         buy_value = min(amount * actual_price, self.balance)
