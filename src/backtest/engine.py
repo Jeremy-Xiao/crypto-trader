@@ -206,7 +206,8 @@ class BacktestEngine:
                 "price": price,
                 "high": high,
                 "low": low,
-                "timestamp": timestamp
+                "timestamp": timestamp,
+                "adx": self._current_adx()   # 预计算 ADX，供策略（如元策略）做市场状态判断，避免重复全量计算
             })
             st = signal.signal_type
 

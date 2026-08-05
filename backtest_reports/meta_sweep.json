@@ -1,0 +1,262 @@
+{
+ "generated_at": "2026-08-05T11:30:57.445792",
+ "objective": "maximize worst-coin return across BTC/ETH/SOL",
+ "grid_size": 24,
+ "top": [
+  {
+   "tag": "ensemble|g0.3|t25.0|adx20.0",
+   "worst": 8.703165157145703,
+   "avg": 16.881883500959454,
+   "coins": {
+    "BTC-USDT": 14.725948693459703,
+    "ETH-USDT": 27.216536652272953,
+    "SOL-USDT": 8.703165157145703
+   },
+   "params": {
+    "mode": "ensemble",
+    "min_adx": 30.0,
+    "gate_off": 0.3,
+    "perf_temp": 25.0,
+    "adx_trend": 20.0
+   }
+  },
+  {
+   "tag": "ensemble|g0.3|t50.0|adx20.0",
+   "worst": 8.703165157145703,
+   "avg": 11.838836074525117,
+   "coins": {
+    "BTC-USDT": 15.57900026856969,
+    "ETH-USDT": 11.234342797859954,
+    "SOL-USDT": 8.703165157145703
+   },
+   "params": {
+    "mode": "ensemble",
+    "min_adx": 30.0,
+    "gate_off": 0.3,
+    "perf_temp": 50.0,
+    "adx_trend": 20.0
+   }
+  },
+  {
+   "tag": "adaptive|g0.3|t25.0|adx20.0",
+   "worst": 7.522427505953237,
+   "avg": 10.57916368563833,
+   "coins": {
+    "BTC-USDT": 8.829768497358199,
+    "ETH-USDT": 15.385295053603551,
+    "SOL-USDT": 7.522427505953237
+   },
+   "params": {
+    "mode": "adaptive",
+    "min_adx": 30.0,
+    "gate_off": 0.3,
+    "perf_temp": 25.0,
+    "adx_trend": 20.0
+   }
+  },
+  {
+   "tag": "adaptive|g0.3|t50.0|adx20.0",
+   "worst": 7.522427505953237,
+   "avg": 10.57916368563833,
+   "coins": {
+    "BTC-USDT": 8.829768497358199,
+    "ETH-USDT": 15.385295053603551,
+    "SOL-USDT": 7.522427505953237
+   },
+   "params": {
+    "mode": "adaptive",
+    "min_adx": 30.0,
+    "gate_off": 0.3,
+    "perf_temp": 50.0,
+    "adx_trend": 20.0
+   }
+  },
+  {
+   "tag": "adaptive|g0.5|t25.0|adx20.0",
+   "worst": 7.522427505953237,
+   "avg": 10.57916368563833,
+   "coins": {
+    "BTC-USDT": 8.829768497358199,
+    "ETH-USDT": 15.385295053603551,
+    "SOL-USDT": 7.522427505953237
+   },
+   "params": {
+    "mode": "adaptive",
+    "min_adx": 30.0,
+    "gate_off": 0.5,
+    "perf_temp": 25.0,
+    "adx_trend": 20.0
+   }
+  },
+  {
+   "tag": "adaptive|g0.5|t50.0|adx20.0",
+   "worst": 7.522427505953237,
+   "avg": 10.57916368563833,
+   "coins": {
+    "BTC-USDT": 8.829768497358199,
+    "ETH-USDT": 15.385295053603551,
+    "SOL-USDT": 7.522427505953237
+   },
+   "params": {
+    "mode": "adaptive",
+    "min_adx": 30.0,
+    "gate_off": 0.5,
+    "perf_temp": 50.0,
+    "adx_trend": 20.0
+   }
+  },
+  {
+   "tag": "ensemble|g0.5|t25.0|adx20.0",
+   "worst": 6.634176199008233,
+   "avg": 15.280025060272363,
+   "coins": {
+    "BTC-USDT": 11.989362329535906,
+    "ETH-USDT": 27.216536652272953,
+    "SOL-USDT": 6.634176199008233
+   },
+   "params": {
+    "mode": "ensemble",
+    "min_adx": 30.0,
+    "gate_off": 0.5,
+    "perf_temp": 25.0,
+    "adx_trend": 20.0
+   }
+  },
+  {
+   "tag": "ensemble|g0.3|t25.0|adx25.0",
+   "worst": 6.120719191591888,
+   "avg": 17.086395347186862,
+   "coins": {
+    "BTC-USDT": 18.900540707998918,
+    "ETH-USDT": 26.23792614196978,
+    "SOL-USDT": 6.120719191591888
+   },
+   "params": {
+    "mode": "ensemble",
+    "min_adx": 30.0,
+    "gate_off": 0.3,
+    "perf_temp": 25.0,
+    "adx_trend": 25.0
+   }
+  },
+  {
+   "tag": "ensemble|g0.3|t50.0|adx25.0",
+   "worst": 6.120719191591888,
+   "avg": 12.379898232774375,
+   "coins": {
+    "BTC-USDT": 19.784632708871285,
+    "ETH-USDT": 11.234342797859954,
+    "SOL-USDT": 6.120719191591888
+   },
+   "params": {
+    "mode": "ensemble",
+    "min_adx": 30.0,
+    "gate_off": 0.3,
+    "perf_temp": 50.0,
+    "adx_trend": 25.0
+   }
+  },
+  {
+   "tag": "regime|g0.5|t25.0|adx25.0",
+   "worst": 5.789765249459469,
+   "avg": 20.070018613812117,
+   "coins": {
+    "BTC-USDT": 23.329042701365324,
+    "ETH-USDT": 31.091247890611555,
+    "SOL-USDT": 5.789765249459469
+   },
+   "params": {
+    "mode": "regime",
+    "min_adx": 30.0,
+    "gate_off": 0.5,
+    "perf_temp": 25.0,
+    "adx_trend": 25.0
+   }
+  },
+  {
+   "tag": "regime|g0.5|t50.0|adx25.0",
+   "worst": 5.789765249459469,
+   "avg": 20.070018613812117,
+   "coins": {
+    "BTC-USDT": 23.329042701365324,
+    "ETH-USDT": 31.091247890611555,
+    "SOL-USDT": 5.789765249459469
+   },
+   "params": {
+    "mode": "regime",
+    "min_adx": 30.0,
+    "gate_off": 0.5,
+    "perf_temp": 50.0,
+    "adx_trend": 25.0
+   }
+  },
+  {
+   "tag": "regime|g0.3|t25.0|adx25.0",
+   "worst": 5.789765249459469,
+   "avg": 19.733879732367907,
+   "coins": {
+    "BTC-USDT": 23.329042701365324,
+    "ETH-USDT": 30.08283124627893,
+    "SOL-USDT": 5.789765249459469
+   },
+   "params": {
+    "mode": "regime",
+    "min_adx": 30.0,
+    "gate_off": 0.3,
+    "perf_temp": 25.0,
+    "adx_trend": 25.0
+   }
+  },
+  {
+   "tag": "regime|g0.3|t50.0|adx25.0",
+   "worst": 5.789765249459469,
+   "avg": 19.733879732367907,
+   "coins": {
+    "BTC-USDT": 23.329042701365324,
+    "ETH-USDT": 30.08283124627893,
+    "SOL-USDT": 5.789765249459469
+   },
+   "params": {
+    "mode": "regime",
+    "min_adx": 30.0,
+    "gate_off": 0.3,
+    "perf_temp": 50.0,
+    "adx_trend": 25.0
+   }
+  },
+  {
+   "tag": "regime|g0.3|t25.0|adx20.0",
+   "worst": 5.789765249459469,
+   "avg": 17.43373707364112,
+   "coins": {
+    "BTC-USDT": 15.420198080852332,
+    "ETH-USDT": 31.091247890611555,
+    "SOL-USDT": 5.789765249459469
+   },
+   "params": {
+    "mode": "regime",
+    "min_adx": 30.0,
+    "gate_off": 0.3,
+    "perf_temp": 25.0,
+    "adx_trend": 20.0
+   }
+  },
+  {
+   "tag": "regime|g0.3|t50.0|adx20.0",
+   "worst": 5.789765249459469,
+   "avg": 17.43373707364112,
+   "coins": {
+    "BTC-USDT": 15.420198080852332,
+    "ETH-USDT": 31.091247890611555,
+    "SOL-USDT": 5.789765249459469
+   },
+   "params": {
+    "mode": "regime",
+    "min_adx": 30.0,
+    "gate_off": 0.3,
+    "perf_temp": 50.0,
+    "adx_trend": 20.0
+   }
+  }
+ ]
+}
