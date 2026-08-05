@@ -236,7 +236,35 @@ class OKXPublicAPI:
         if after is not None:
             params["after"] = str(after)
         return self._public_request("/api/v5/market/candles", params)
-    
+
+    def get_history_candles(
+        self,
+        instId: str,
+        bar: str = "1D",
+        limit: int = 100,
+        after: Optional[str] = None
+    ) -> Dict:
+        """
+        获取历史K线数据（深度远大于 get_candles）
+
+        /market/candles 只保留最近 1440 根，跑多年回测必须用本接口。
+        日K 实测可回溯至 2020 年（2400+ 根）。
+
+        Args:
+            instId: 产品ID
+            bar: K线周期
+            limit: 每页数量（实测 300 可用）
+            after: 分页参数，传入上一页最早一根K线的时间戳(毫秒)，继续拉更早的数据
+        """
+        params = {
+            "instId": instId,
+            "bar": bar,
+            "limit": str(limit)
+        }
+        if after is not None:
+            params["after"] = str(after)
+        return self._public_request("/api/v5/market/history-candles", params)
+
     def get_trades(self, instId: str, limit: int = 100) -> Dict:
         """
         获取近期成交

@@ -22,7 +22,15 @@ class BacktestConfig:
     initial_balance: float = 10000       # 初始资金
     fee_rate: float = 0.001              # 手续费率（0.1%）
     slippage: float = 0.0005             # 滑点（0.05%）
-    leverage: float = 1.0                # 杠杆倍数
+
+    # ===== 杠杆与保证金 =====
+    leverage: float = 1.0                # 杠杆倍数（1.0 = 无杠杆/现货口径）
+    max_leverage: float = 3.0            # 硬上限，配置超过会被强制截断，防手滑
+    maintenance_margin_rate: float = 0.005   # 维持保证金率（占名义价值），低于则强平
+    liquidation_buffer: float = 0.25     # 提前强平缓冲：权益 < 初始保证金×此值 时主动平仓（早于交易所强平）
+    borrow_rate_daily: float = 0.0003    # 借币日利率（≈11%年化），只对借入部分 notional×(1-1/L) 计息
+    risk_scales_with_leverage: bool = False  # False=杠杆只放开资金约束、不放大单笔风险（推荐）
+    max_drawdown_halt: float = 0.0       # 回撤熔断：权益自峰值回撤超过此比例时禁止新开仓（0=关闭）
 
     # ATR 动态风控参数
     use_atr_risk: bool = True            # 启用 ATR 动态风控
@@ -68,8 +76,13 @@ class BacktestEngine:
         self.strategy = strategy
         self.config = config or BacktestConfig()
 
+        # 杠杆硬约束：任何配置都不可能突破 max_leverage，且不得低于 1
+        self.leverage = min(max(float(self.config.leverage), 1.0),
+                            float(self.config.max_leverage))
+
         # 状态
-        self.balance = self.config.initial_balance
+        self.balance = self.config.initial_balance   # 可用现金（保证金模式下为「空闲保证金」）
+        self.margin_used = 0.0                       # 当前持仓占用的保证金
         self.trades: List[Dict] = []
         self.equity_curve: List[Dict] = []
         self.position_amount = 0.0
@@ -81,11 +94,34 @@ class BacktestEngine:
             'stop_loss': 0, 'take_profit': 0,
             'trailing_stop': 0, 'signal_sell': 0,
             'fixed_sl': 0, 'fixed_tp': 0,
-            'reverse': 0, 'end_of_backtest': 0
+            'reverse': 0, 'end_of_backtest': 0,
+            'liquidation': 0
         }
         self.mtf_blocked = 0
         self.adx_blocked = 0
+        self.dd_halt_blocked = 0        # 回撤熔断拦截次数
+        self.margin_blocked = 0         # 保证金不足导致无法开仓次数
+        self.liquidations = 0           # 强平次数
+        self.total_borrow_cost = 0.0    # 累计借币利息
+        self.peak_equity = self.config.initial_balance
+        self.max_gross_leverage = 0.0   # 实际用到的最大名义杠杆（名义价值/权益）
         self.regime_history: List[str] = []
+        self.data: Optional[pd.DataFrame] = None
+        self._adx_series = None         # load_data 时预计算，避免逐根重算 ADX
+
+    # ==================== 保证金记账 ====================
+
+    def _unrealized_pnl(self, price: float) -> float:
+        """当前持仓的未实现盈亏"""
+        if self.position_side == PositionSide.LONG:
+            return (price - self.position_price) * self.position_amount
+        if self.position_side == PositionSide.SHORT:
+            return (self.position_price - price) * self.position_amount
+        return 0.0
+
+    def _current_equity(self, price: float) -> float:
+        """账户权益 = 空闲现金 + 占用保证金 + 未实现盈亏"""
+        return self.balance + self.margin_used + self._unrealized_pnl(price)
 
     def load_data(self, data: pd.DataFrame) -> None:
         """
@@ -95,6 +131,20 @@ class BacktestEngine:
             data: DataFrame with columns: timestamp, open, high, low, close, volume
         """
         self.data = data
+        self._adx_series = None
+        # 预计算 ADX 序列：ADX 由 diff/shift(1)/ewm(adjust=False) 构成，全部是因果算子，
+        # 因此「全量算一次按下标取」与「每根K线用前缀重算」结果完全一致，不存在未来函数。
+        # 这一步把入场过滤从 O(n²) 降到 O(n)，多年回测提速几十倍。
+        try:
+            if len(data) > 0 and {"high", "low", "close"}.issubset(data.columns):
+                self._adx_series = ADX(
+                    pd.Series(data["high"].astype(float).values),
+                    pd.Series(data["low"].astype(float).values),
+                    pd.Series(data["close"].astype(float).values),
+                    14
+                ).values
+        except Exception:
+            self._adx_series = None
 
     def run(self) -> Dict:
         """运行回测"""
@@ -105,33 +155,45 @@ class BacktestEngine:
         print(f"数据范围: {len(self.data)} 条")
         print(f"ATR风控: {'开启' if self.config.use_atr_risk else '关闭'} | "
               f"移动止损: {'开启' if self.config.use_trailing else '关闭'} | "
-              f"MTF确认: {'开启' if self.config.use_mtf else '关闭'}")
+              f"MTF确认: {'开启' if self.config.use_mtf else '关闭'} | "
+              f"杠杆: {self.leverage}x")
 
         for idx, row in self.data.iterrows():
             timestamp = row.get("timestamp", row.get("ts", ""))
             price = float(row["close"])
             high = float(row.get("high", price))
             low = float(row.get("low", price))
+            open_p = float(row.get("open", price))
 
-            # 更新策略的账户余额和历史数据
-            self.strategy.account_balance = self.balance
+            # 更新策略的历史数据
             self.strategy.price_history.append(price)
             self.strategy.high_history.append(high)
             self.strategy.low_history.append(low)
+
+            # 杠杆持仓：每根K线计提借币利息
+            self._accrue_borrow_cost(price)
+            # 策略的仓位计算基准用「权益」而非「空闲现金」（保证金模式下现金会被占用）
+            self.strategy.account_balance = self._current_equity(price)
 
             # 市场状态检测（统计用）
             if self.config.use_regime and len(self.strategy.price_history) >= 25:
                 regime, info = detect_market_regime(
                     self.strategy.high_history,
                     self.strategy.low_history,
-                    self.strategy.price_history
+                    self.strategy.price_history,
+                    adx_val=self._current_adx()   # 复用预计算的 ADX，避免重复全量计算
                 )
                 self.regime_history.append(regime.value)
             else:
                 self.regime_history.append("unknown")
 
-            # ====== 引擎层：持仓时优先检查退出条件（止损/止盈/移动止损）======
+            # ====== 引擎层：持仓时优先检查强平，再检查退出条件（止损/止盈/移动止损）======
             if self.position_side != PositionSide.NONE:
+                # 强平优先级最高：账户先爆仓，止损再漂亮也没用
+                if self._check_liquidation(high, low, timestamp, open_p):
+                    self._record_equity(price, timestamp)
+                    continue
+
                 exit_reason = self._check_exit_conditions(price, high, low, timestamp)
 
                 if exit_reason:
@@ -213,6 +275,10 @@ class BacktestEngine:
                   f"信号卖出{ss['signal_sell']}({ss['signal_sell']/total*100:.0f}%)")
         if self.mtf_blocked > 0:
             print(f"MTF拦截: {self.mtf_blocked}次")
+        if self.leverage > 1.0:
+            print(f"杠杆: {self.leverage}x | 实际最大名义杠杆: {self.max_gross_leverage:.2f}x | "
+                  f"强平: {self.liquidations}次 | 借币利息: {self.total_borrow_cost:.2f} | "
+                  f"回撤熔断拦截: {self.dd_halt_blocked}次")
 
         return results
 
@@ -274,10 +340,16 @@ class BacktestEngine:
         return None
 
     def _current_adx(self) -> float:
-        """计算当前 ADX（用于入场过滤）"""
+        """当前 ADX（用于入场过滤）。优先读预计算序列，否则回退到实时计算。"""
         n = len(self.strategy.price_history)
         if n < 20:
             return 0.0
+
+        series = getattr(self, "_adx_series", None)
+        if series is not None and n - 1 < len(series):
+            val = series[n - 1]
+            return float(val) if not pd.isna(val) else 0.0
+
         adx_series = ADX(
             pd.Series(self.strategy.high_history),
             pd.Series(self.strategy.low_history),
@@ -287,31 +359,61 @@ class BacktestEngine:
         val = adx_series.iloc[-1]
         return float(val) if not pd.isna(val) else 0.0
 
+    def _size_notional(self, price: float, actual_price: float, amount: float) -> float:
+        """
+        统一的仓位定价（多空共用），三重约束取最小：
+
+        1. 策略/ATR 给出的目标仓位
+        2. 名义价值上限 = 权益 × max_position_pct × 杠杆
+        3. 可用保证金约束：margin + fee ≤ 空闲现金
+
+        安全要点：默认 risk_scales_with_leverage=False，即 ATR 单笔风险始终按「权益」
+        计算，杠杆只放开资金约束、不放大每笔亏损。3倍杠杆下单笔风险仍是 risk_pct。
+        """
+        equity = self._current_equity(price)
+        if equity <= 0:
+            return 0.0
+
+        if self.config.use_atr_risk:
+            atr_val = self.strategy.get_atr(self.config.atr_period)
+            if atr_val > 0:
+                risk_base = equity * (self.leverage if self.config.risk_scales_with_leverage else 1.0)
+                amount = self.strategy.calculate_atr_position_size(
+                    risk_base, actual_price, atr_val,
+                    risk_pct=self.config.risk_pct,
+                    atr_multiplier=self.config.atr_multiplier,
+                    max_pct=self.config.max_position_pct * self.leverage
+                )
+
+        notional = amount * actual_price
+        # 约束2：名义价值上限
+        notional = min(notional, equity * self.config.max_position_pct * self.leverage)
+        # 约束3：保证金 + 手续费不得超过空闲现金
+        #   notional/L + notional*fee ≤ balance  →  notional ≤ balance / (1/L + fee)
+        denom = 1.0 / self.leverage + self.config.fee_rate
+        notional = min(notional, max(self.balance, 0.0) / denom)
+        return max(notional, 0.0)
+
     def _execute_buy(self, price: float, amount: float, timestamp: str, reason: str):
-        """执行买入开多"""
+        """执行买入开多（保证金记账）"""
         if self.position_amount > 0:
             return
 
         actual_price = price * (1 + self.config.slippage)
+        notional = self._size_notional(price, actual_price, amount)
+        if notional <= 0:
+            self.margin_blocked += 1
+            return
 
-        # ATR 动态仓位
-        if self.config.use_atr_risk:
-            atr_val = self.strategy.get_atr(self.config.atr_period)
-            if atr_val > 0:
-                amount = self.strategy.calculate_atr_position_size(
-                    self.balance, actual_price, atr_val,
-                    risk_pct=self.config.risk_pct,
-                    atr_multiplier=self.config.atr_multiplier,
-                    max_pct=self.config.max_position_pct
-                )
+        actual_amount = notional / actual_price
+        margin = notional / self.leverage
+        fee = notional * self.config.fee_rate
 
-        buy_value = min(amount * actual_price, self.balance)
-        actual_amount = buy_value / actual_price
-        fee = buy_value * self.config.fee_rate
-
-        self.balance -= (buy_value + fee)
+        self.balance -= (margin + fee)
+        self.margin_used = margin
         self.position_amount = actual_amount
         self.position_price = actual_price
+        self._track_gross_leverage(price)
 
         self.strategy.open_position(actual_price, actual_amount, timestamp)
 
@@ -322,15 +424,23 @@ class BacktestEngine:
             "side": "long_open",
             "price": actual_price,
             "amount": actual_amount,
+            "notional": notional,
+            "margin": margin,
             "fee": fee,
             "pnl": 0,
             "reason": reason
         })
 
     def _open_position(self, side: PositionSide, price: float, amount: float, timestamp: str, reason: str):
-        """开仓（多或空），含 ADX 入场过滤"""
+        """开仓（多或空），含 ADX 入场过滤 + 回撤熔断"""
         if self.position_side != PositionSide.NONE:
             return
+        # 回撤熔断：权益自峰值回撤过大时停止新开仓，防止杠杆下的连续亏损螺旋
+        if self.config.max_drawdown_halt > 0 and self.peak_equity > 0:
+            dd = 1.0 - self._current_equity(price) / self.peak_equity
+            if dd >= self.config.max_drawdown_halt:
+                self.dd_halt_blocked += 1
+                return
         # ADX 入场过滤：震荡市（ADX 过低）禁止入场，多空都适用
         if self.config.min_adx_for_entry > 0:
             adx_now = self._current_adx()
@@ -345,37 +455,30 @@ class BacktestEngine:
 
     def _execute_open_short(self, price: float, amount: float, timestamp: str, reason: str):
         """
-        执行卖出开空（做空）
+        执行卖出开空（做空，保证金记账）
 
-        仓位算法与 _execute_buy 完全对等：
-        1. 启用 ATR 风控时用 ATR 动态仓位重算（否则多空仓位口径不一致，回测对比失真）
-        2. 名义价值受 max_position_pct × balance 约束
+        与 _execute_buy 完全对等：同样的 ATR 仓位、同样的名义上限、同样的保证金占用。
+        做空同样需要压保证金（不再是「凭空收到现金」），这才符合真实杠杆账户。
         """
         if self.position_amount > 0:
             return
 
         actual_price = price * (1 - self.config.slippage)  # 做空卖出，滑点不利方向→成交价略低
+        notional = self._size_notional(price, actual_price, amount)
+        if notional <= 0:
+            self.margin_blocked += 1
+            return
 
-        # ATR 动态仓位（与做多对等）
-        if self.config.use_atr_risk:
-            atr_val = self.strategy.get_atr(self.config.atr_period)
-            if atr_val > 0:
-                amount = self.strategy.calculate_atr_position_size(
-                    self.balance, actual_price, atr_val,
-                    risk_pct=self.config.risk_pct,
-                    atr_multiplier=self.config.atr_multiplier,
-                    max_pct=self.config.max_position_pct
-                )
+        actual_amount = notional / actual_price
+        margin = notional / self.leverage
+        fee = notional * self.config.fee_rate
 
-        # 名义价值上限约束（与做多的 min(amount*price, balance) 对等）
-        max_notional = self.balance * self.config.max_position_pct
-        sell_value = min(amount * actual_price, max_notional)
-        actual_amount = sell_value / actual_price
-        fee = sell_value * self.config.fee_rate
-
-        self.balance += (sell_value - fee)                # 收到现金，同时背负 actual_amount 币的负债
+        self.balance -= (margin + fee)     # 压保证金，卖出所得计入持仓盈亏而非现金
+        self.margin_used = margin
         self.position_amount = actual_amount
         self.position_price = actual_price
+        self._track_gross_leverage(price)
+
         self.strategy.open_position(actual_price, actual_amount, timestamp, side=PositionSide.SHORT)
         self.trades.append({
             "timestamp": timestamp,
@@ -384,20 +487,25 @@ class BacktestEngine:
             "side": "short_open",
             "price": actual_price,
             "amount": actual_amount,
+            "notional": notional,
+            "margin": margin,
             "fee": fee,
             "pnl": 0,
             "reason": reason
         })
 
     def _execute_buy_to_cover(self, price: float, timestamp: str, reason: str):
-        """执行买入平空（买回还债）"""
+        """执行买入平空（保证金释放 + 盈亏结算）"""
         if self.position_amount <= 0:
             return
         actual_price = price * (1 + self.config.slippage)  # 买回，滑点不利方向→成交价略高
-        buy_value = self.position_amount * actual_price
-        fee = buy_value * self.config.fee_rate
+        exit_notional = self.position_amount * actual_price
+        fee = exit_notional * self.config.fee_rate
         pnl = (self.position_price - actual_price) * self.position_amount  # 空头盈利 = 开仓价 - 平仓价
-        self.balance -= (buy_value + fee)
+
+        self.balance += (self.margin_used + pnl - fee)
+        self.margin_used = 0.0
+
         self.strategy.close_position(actual_price, timestamp, reason)
         self.trades.append({
             "timestamp": timestamp,
@@ -406,6 +514,7 @@ class BacktestEngine:
             "side": "short_close",
             "price": actual_price,
             "amount": self.position_amount,
+            "notional": exit_notional,
             "fee": fee,
             "pnl": pnl,
             "reason": reason
@@ -422,16 +531,17 @@ class BacktestEngine:
         self.position_side = PositionSide.NONE
 
     def _execute_sell(self, price: float, timestamp: str, reason: str):
-        """执行卖出平多"""
+        """执行卖出平多（保证金释放 + 盈亏结算）"""
         if self.position_amount <= 0:
             return
 
         actual_price = price * (1 - self.config.slippage)
-        sell_value = self.position_amount * actual_price
-        fee = sell_value * self.config.fee_rate
+        exit_notional = self.position_amount * actual_price
+        fee = exit_notional * self.config.fee_rate
         pnl = (actual_price - self.position_price) * self.position_amount
 
-        self.balance += (sell_value - fee)
+        self.balance += (self.margin_used + pnl - fee)
+        self.margin_used = 0.0
 
         self.strategy.close_position(actual_price, timestamp, reason)
 
@@ -442,6 +552,7 @@ class BacktestEngine:
             "side": "long_close",
             "price": actual_price,
             "amount": self.position_amount,
+            "notional": exit_notional,
             "fee": fee,
             "pnl": pnl,
             "reason": reason
@@ -451,19 +562,110 @@ class BacktestEngine:
         self.position_price = 0.0
 
     def _record_equity(self, price: float, timestamp: str):
-        """记录权益曲线（空头持仓的市值记为负数）"""
+        """记录权益曲线（保证金口径：现金 + 占用保证金 + 未实现盈亏）"""
         if self.position_side == PositionSide.SHORT:
             pos_value = -self.position_amount * price
         else:
             pos_value = self.position_amount * price
-        equity = self.balance + pos_value
+        equity = self._current_equity(price)
+        if equity > self.peak_equity:
+            self.peak_equity = equity
         self.equity_curve.append({
             "timestamp": timestamp,
             "equity": equity,
             "balance": self.balance,
+            "margin_used": self.margin_used,
             "position_value": pos_value,
             "price": price
         })
+
+    # ==================== 杠杆风控 ====================
+
+    def _track_gross_leverage(self, price: float):
+        """记录实际达到的最大名义杠杆（名义价值 / 权益），用于事后核查是否越界"""
+        equity = self._current_equity(price)
+        if equity > 0:
+            gross = (self.position_amount * price) / equity
+            self.max_gross_leverage = max(self.max_gross_leverage, gross)
+
+    def _accrue_borrow_cost(self, price: float):
+        """
+        计提借币利息：只对「借入部分」计息 = notional × (1 - 1/L) × 日利率
+
+        杠杆1倍时借入为0，成本自然为0，保证 1x 结果与无杠杆口径可比。
+        """
+        if self.position_side == PositionSide.NONE or self.leverage <= 1.0:
+            return
+        notional = self.position_amount * price
+        borrowed = notional * (1.0 - 1.0 / self.leverage)
+        cost = borrowed * self.config.borrow_rate_daily
+        if cost > 0:
+            self.balance -= cost
+            self.total_borrow_cost += cost
+
+    def _liquidation_price(self) -> float:
+        """
+        解出精确的强平价：权益恰好等于触发线时的价格。
+
+        触发线取两者较高者，保证「先于交易所强平」：
+        - 交易所维持保证金：名义价值 × maintenance_margin_rate
+        - 自设安全缓冲：初始保证金 × liquidation_buffer
+        """
+        amt = self.position_amount
+        entry = self.position_price
+        cash = self.balance + self.margin_used
+        mmr = self.config.maintenance_margin_rate
+        buf = self.margin_used * self.config.liquidation_buffer
+
+        if self.position_side == PositionSide.LONG:
+            # 缓冲线（阈值与价格无关）: cash + (P-entry)*amt = buf
+            p_buf = entry + (buf - cash) / amt
+            # 维持保证金线: cash + (P-entry)*amt = amt*P*mmr
+            p_mm = (entry * amt - cash) / (amt * (1 - mmr))
+            return max(p_buf, p_mm)   # 下跌途中先碰到的是较高者
+        else:
+            p_buf = entry + (cash - buf) / amt
+            p_mm = (cash + entry * amt) / (amt * (1 + mmr))
+            return min(p_buf, p_mm)   # 上涨途中先碰到的是较低者
+
+    def _check_liquidation(self, high: float, low: float, timestamp: str,
+                           open_price: Optional[float] = None) -> bool:
+        """
+        强平检查（用K线内对持仓最不利的价格判定是否触及）
+
+        成交价处理：
+        - 正常情况按精确强平价成交（交易所在触线瞬间平仓，不会等到当根K线最低/最高点）
+        - 若开盘就跳空穿过强平价，则按开盘价成交（真实的跳空损失，必须体现）
+        """
+        if self.position_side == PositionSide.NONE:
+            return False
+        # 现货多头（1倍）无借贷，不可能被强平；空头即使1倍也借了币，亏损无上限，仍需检查
+        if self.position_side == PositionSide.LONG and self.leverage <= 1.0:
+            return False
+        if self.position_amount <= 0:
+            return False
+
+        liq_price = self._liquidation_price()
+
+        if self.position_side == PositionSide.LONG:
+            if low > liq_price:
+                return False
+            fill = liq_price
+            if open_price is not None and open_price < liq_price:
+                fill = open_price          # 跳空低开，只能在更差的价格成交
+            fill = max(fill, low)
+        else:
+            if high < liq_price:
+                return False
+            fill = liq_price
+            if open_price is not None and open_price > liq_price:
+                fill = open_price          # 跳空高开
+            fill = min(fill, high)
+
+        self.stop_stats['liquidation'] += 1
+        self.liquidations += 1
+        self._close_current_position(fill, timestamp, 'liquidation')
+        return True
 
     def _calculate_performance(self) -> Dict:
         """计算绩效指标"""
@@ -538,9 +740,17 @@ class BacktestEngine:
             "total_fee": sum([t["fee"] for t in self.trades]),
             "stop_stats": self.stop_stats,
             "mtf_blocked": self.mtf_blocked,
+            "adx_blocked": self.adx_blocked,
             "regime_stats": regime_stats,
             "long_stats": long_stats,
-            "short_stats": short_stats
+            "short_stats": short_stats,
+            # 杠杆相关
+            "leverage": self.leverage,
+            "liquidations": self.liquidations,
+            "borrow_cost": self.total_borrow_cost,
+            "max_gross_leverage": self.max_gross_leverage,
+            "dd_halt_blocked": self.dd_halt_blocked,
+            "margin_blocked": self.margin_blocked,
         }
 
     def get_equity_curve_df(self) -> pd.DataFrame:

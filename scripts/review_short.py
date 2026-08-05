@@ -49,13 +49,15 @@ def check(name, cond):
 #   上限 max_amount = 10000*0.5/99.95 = 50.02 → 不截断，最终 amount=20
 e, strat = make_engine()
 e._open_position(PositionSide.SHORT, 100.0, 10.0, "t0", "open")
-# 开空成交价 = 100*(1-0.0005)=99.95; sell_value=20*99.95=1999; fee=1.999; balance=10000+1999-1.999=11997.001
+# 开空成交价 = 100*(1-0.0005)=99.95; notional=20*99.95=1999
+# 保证金模式（L=1）：margin=1999, fee=1.999 → balance = 10000-1999-1.999 = 7999.001
 check("short: position_side==SHORT", e.position_side == PositionSide.SHORT)
 check("short: ATR sizing applied (amount==20)", approx(e.position_amount, 20.0, 0.01))
-check("short: balance += cash on open", approx(e.balance, 11997.001, 0.1))
+check("short: margin posted on open (not cash-in)", approx(e.balance, 7999.001, 0.1))
+check("short: margin_used == notional at 1x", approx(e.margin_used, 1999.0, 0.1))
 e._close_current_position(90.0, "t1", "close")
-# 平空成交价 = 90*(1+0.0005)=90.045; buy_value=20*90.045=1800.9; fee=1.8009
-# pnl=(99.95-90.045)*20=198.1; balance = 11997.001-1800.9-1.8009 = 10194.30
+# 平空：exit_notional=20*90.045=1800.9; fee=1.8009; pnl=(99.95-90.045)*20=198.1
+# balance = 7999.001 + 释放保证金1999 + 198.1 - 1.8009 = 10194.30
 check("short: position_side reset on close", e.position_side == PositionSide.NONE)
 check("short: balance after close ~10194.30", approx(e.balance, 10194.30, 0.2))
 check("short: recorded pnl ~198.1", abs(e.trades[-1]['pnl'] - 198.1) < 0.5)

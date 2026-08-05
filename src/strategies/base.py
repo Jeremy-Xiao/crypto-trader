@@ -107,7 +107,8 @@ def detect_market_regime(
     lows: list,
     closes: list,
     adx_period: int = 14,
-    lookback: int = 50
+    lookback: int = 50,
+    adx_val: Optional[float] = None
 ) -> tuple:
     """
     检测市场状态：trending（趋势）/ ranging（震荡）
@@ -115,6 +116,10 @@ def detect_market_regime(
     综合两个指标：
     1. ADX > 25 → 趋势市；ADX < 20 → 震荡市；20-25 → 中性
     2. 波动率分位数：近期波动率在历史中的位置，辅助判断
+
+    Args:
+        adx_val: 外部已算好的 ADX 值。回测引擎会预计算整条 ADX 序列并传入，
+                 避免在每根K线上重复全量计算（结果完全一致，仅为提速）。
 
     Returns:
         (MarketRegime, {'adx': float, 'vol_pct': float})
@@ -124,17 +129,29 @@ def detect_market_regime(
         return MarketRegime.UNKNOWN, {'adx': 0, 'vol_pct': 0.5}
 
     # ADX
-    adx_series = ADX(highs, lows, closes, adx_period)
-    adx_val = float(adx_series.iloc[-1]) if not pd.isna(adx_series.iloc[-1]) else 0
+    if adx_val is None:
+        adx_series = ADX(highs, lows, closes, adx_period)
+        adx_val = float(adx_series.iloc[-1]) if not pd.isna(adx_series.iloc[-1]) else 0
+    else:
+        adx_val = float(adx_val) if not pd.isna(adx_val) else 0
 
     # 波动率分位数
+    # 原实现用列表推导逐窗口调用 .std()（且每个窗口算两遍），复杂度 O(n²) 且常数极大；
+    # 这里改为向量化 rolling(20).std()，数值完全等价（同为 ddof=1，同样的窗口切分）。
     returns = pd.Series(closes).pct_change().dropna()
-    recent_vol = returns.iloc[-20:].std() if len(returns) >= 20 else returns.std()
-    if len(returns) >= lookback:
-        hist_vols = [returns.iloc[i:i+20].std() for i in range(len(returns) - 20)
-                     if not pd.isna(returns.iloc[i:i+20].std())]
-        if hist_vols:
-            vol_pct = sum(1 for v in hist_vols if v <= recent_vol) / len(hist_vols)
+    m = len(returns)
+    if m >= 20:
+        roll = returns.rolling(20).std()
+        recent_vol = roll.iloc[-1]
+    else:
+        roll = None
+        recent_vol = returns.std()
+
+    if m >= lookback and roll is not None and not pd.isna(recent_vol):
+        # 对应原来的 i ∈ [0, m-21]，窗口 [i, i+20) 的右端点下标为 i+19 ∈ [19, m-2]
+        hist_vols = roll.iloc[19:m - 1].dropna().to_numpy()
+        if hist_vols.size > 0:
+            vol_pct = float((hist_vols <= recent_vol).sum()) / hist_vols.size
         else:
             vol_pct = 0.5
     else:
