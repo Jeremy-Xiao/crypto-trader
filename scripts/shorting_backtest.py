@@ -171,10 +171,16 @@ def main():
                 'long_only': lo['total_return'], 'bidirectional': bi['total_return'],
                 'delta': delta,
                 'lo_trades': lo['total_trades'], 'bi_trades': bi['total_trades'],
-                'bi_short_trades': bi['stop_stats'].get('stop_loss', 0) + bi['stop_stats'].get('take_profit', 0),
+                # 真实做空笔数来自引擎的 short_stats（旧版误用 stop_loss+take_profit，与做空无关）
+                'bi_short_trades': bi['short_stats']['trades'],
+                'bi_short_pnl': round(bi['short_stats']['pnl'], 2),
+                'bi_short_wins': bi['short_stats']['wins'],
+                'bi_long_trades': bi['long_stats']['trades'],
+                'bi_long_pnl': round(bi['long_stats']['pnl'], 2),
             })
             print(f"  {symbol:<11} {strat_name:<10} 仅多={lo['total_return']:>+7.2f}%  双向={bi['total_return']:>+7.2f}%  "
-                  f"Δ={delta:>+6.2f}%  (多:{lo['total_trades']}笔 / 双向:{bi['total_trades']}笔)")
+                  f"Δ={delta:>+6.2f}%  (多:{lo['total_trades']}笔 / 双向:{bi['total_trades']}笔"
+                  f" [空{bi['short_stats']['trades']}笔 PnL{bi['short_stats']['pnl']:+.0f}])")
 
     # 汇总
     lo_rets = [r['total_return'] for r in mode_results['long_only']]
@@ -190,6 +196,16 @@ def main():
     print(f"  仅做多    平均={lo_avg:+.2f}%  盈利组={lo_win}/12  最佳={max(lo_rets):+.2f}%  最差={min(lo_rets):+.2f}%")
     print(f"  双向(做空)平均={bi_avg:+.2f}%  盈利组={bi_win}/12  最佳={max(bi_rets):+.2f}%  最差={min(bi_rets):+.2f}%")
     print(f"  做空增量 Δ = {bi_avg - lo_avg:+.2f}% (平均每组)")
+
+    # 做空真实成绩单（修复统计 bug 后首次可信）
+    tot_short = sum(r['short_stats']['trades'] for r in mode_results['bidirectional'])
+    tot_short_win = sum(r['short_stats']['wins'] for r in mode_results['bidirectional'])
+    tot_short_pnl = sum(r['short_stats']['pnl'] for r in mode_results['bidirectional'])
+    tot_long = sum(r['long_stats']['trades'] for r in mode_results['bidirectional'])
+    tot_long_pnl = sum(r['long_stats']['pnl'] for r in mode_results['bidirectional'])
+    sw = tot_short_win / tot_short * 100 if tot_short else 0
+    print(f"  [双向模式明细] 做空 {tot_short}笔 胜{tot_short_win}笔({sw:.0f}%) PnL={tot_short_pnl:+.0f} | "
+          f"做多 {tot_long}笔 PnL={tot_long_pnl:+.0f}")
     print(f"  买入持有组合={bh_port:+.2f}% | 货币基金={mfm:+.2f}%")
     print(f"  双向是否跑赢买入持有: {'YES' if bi_avg > bh_port else 'no'}  | 仅多是否跑赢: {'YES' if lo_avg > bh_port else 'no'}")
 
@@ -206,6 +222,9 @@ def main():
             'bidirectional_avg': round(bi_avg, 2), 'bidirectional_profitable': bi_win,
             'short_delta_avg': round(bi_avg - lo_avg, 2),
             'buy_hold_portfolio': round(bh_port, 2), 'money_market': round(mfm, 2),
+            'short_total_trades': tot_short, 'short_total_wins': tot_short_win,
+            'short_win_rate': round(sw, 1), 'short_total_pnl': round(tot_short_pnl, 2),
+            'long_total_trades': tot_long, 'long_total_pnl': round(tot_long_pnl, 2),
         },
         'pair_comparison': pair_comparison,
         'all_results': {
@@ -218,7 +237,9 @@ def main():
                                'total_return': r['total_return'], 'max_drawdown': r['max_drawdown'],
                                'sharpe_ratio': r['sharpe_ratio'], 'win_rate': r['win_rate'],
                                'total_trades': r['total_trades'], 'final_equity': r['final_equity'],
-                               'stop_stats': r['stop_stats'], 'adx_blocked': r['adx_blocked']} for r in mode_results['bidirectional']],
+                               'stop_stats': r['stop_stats'], 'adx_blocked': r['adx_blocked'],
+                               'long_stats': r['long_stats'], 'short_stats': r['short_stats']}
+                              for r in mode_results['bidirectional']],
         },
         'best_bidirectional': {'symbol': best_bi['symbol'], 'strategy': best_bi['strategy'],
                                'total_return': best_bi['total_return'], 'max_drawdown': best_bi['max_drawdown'],

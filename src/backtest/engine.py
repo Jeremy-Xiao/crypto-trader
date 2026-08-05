@@ -80,7 +80,8 @@ class BacktestEngine:
         self.stop_stats = {
             'stop_loss': 0, 'take_profit': 0,
             'trailing_stop': 0, 'signal_sell': 0,
-            'fixed_sl': 0, 'fixed_tp': 0
+            'fixed_sl': 0, 'fixed_tp': 0,
+            'reverse': 0, 'end_of_backtest': 0
         }
         self.mtf_blocked = 0
         self.adx_blocked = 0
@@ -150,6 +151,7 @@ class BacktestEngine:
             # 出场信号（平多 / 平空）
             if st in (SignalType.CLOSE_LONG, SignalType.CLOSE_SHORT):
                 if self.position_side != PositionSide.NONE:
+                    self.stop_stats['signal_sell'] += 1
                     self._close_current_position(price, timestamp, st.value)
                     self._record_equity(price, timestamp)
                     continue
@@ -172,6 +174,9 @@ class BacktestEngine:
                     pass  # 已持有同向，忽略
                 else:
                     # 反向信号 → 先平后开（翻转）
+                    # 注意：平仓无条件执行（趋势反转即离场），但新仓仍需过 ADX 过滤，
+                    # 因此可能出现「只平不开」——这是预期行为，被拦截时 adx_blocked 会累加
+                    self.stop_stats['reverse'] += 1
                     self._close_current_position(price, timestamp, "reverse")
                     self._open_position(target, price, signal.amount, timestamp, signal.reason)
 
@@ -184,6 +189,7 @@ class BacktestEngine:
             last_row = self.data.iloc[-1]
             last_price = float(last_row["close"])
             last_ts = last_row.get("timestamp", last_row.get("ts", ""))
+            self.stop_stats['end_of_backtest'] += 1
             self._close_current_position(last_price, last_ts, "end_of_backtest")
 
         # 计算绩效
@@ -195,6 +201,9 @@ class BacktestEngine:
         print(f"夏普比率: {results['sharpe_ratio']:.2f}")
         print(f"胜率: {results['win_rate']:.2f}%")
         print(f"总交易: {results['total_trades']} | 盈利: {results['winning_trades']}")
+        ls, ss_ = results['long_stats'], results['short_stats']
+        print(f"多头: {ls['trades']}笔 盈利{ls['wins']}笔 PnL {ls['pnl']:.2f} | "
+              f"空头: {ss_['trades']}笔 盈利{ss_['wins']}笔 PnL {ss_['pnl']:.2f}")
         if sum(self.stop_stats.values()) > 0:
             ss = self.stop_stats
             total = sum(ss.values())
@@ -310,6 +319,7 @@ class BacktestEngine:
             "timestamp": timestamp,
             "instId": self.strategy.instId,
             "action": "buy",
+            "side": "long_open",
             "price": actual_price,
             "amount": actual_amount,
             "fee": fee,
@@ -334,23 +344,46 @@ class BacktestEngine:
         self.position_side = side
 
     def _execute_open_short(self, price: float, amount: float, timestamp: str, reason: str):
-        """执行卖出开空（做空）"""
+        """
+        执行卖出开空（做空）
+
+        仓位算法与 _execute_buy 完全对等：
+        1. 启用 ATR 风控时用 ATR 动态仓位重算（否则多空仓位口径不一致，回测对比失真）
+        2. 名义价值受 max_position_pct × balance 约束
+        """
         if self.position_amount > 0:
             return
+
         actual_price = price * (1 - self.config.slippage)  # 做空卖出，滑点不利方向→成交价略低
-        sell_value = amount * actual_price
+
+        # ATR 动态仓位（与做多对等）
+        if self.config.use_atr_risk:
+            atr_val = self.strategy.get_atr(self.config.atr_period)
+            if atr_val > 0:
+                amount = self.strategy.calculate_atr_position_size(
+                    self.balance, actual_price, atr_val,
+                    risk_pct=self.config.risk_pct,
+                    atr_multiplier=self.config.atr_multiplier,
+                    max_pct=self.config.max_position_pct
+                )
+
+        # 名义价值上限约束（与做多的 min(amount*price, balance) 对等）
+        max_notional = self.balance * self.config.max_position_pct
+        sell_value = min(amount * actual_price, max_notional)
+        actual_amount = sell_value / actual_price
         fee = sell_value * self.config.fee_rate
-        self.balance += (sell_value - fee)                # 收到现金，同时背负 amount 币的负债
-        self.position_amount = amount
+
+        self.balance += (sell_value - fee)                # 收到现金，同时背负 actual_amount 币的负债
+        self.position_amount = actual_amount
         self.position_price = actual_price
-        self.strategy.open_position(actual_price, amount, timestamp, side=PositionSide.SHORT)
+        self.strategy.open_position(actual_price, actual_amount, timestamp, side=PositionSide.SHORT)
         self.trades.append({
             "timestamp": timestamp,
             "instId": self.strategy.instId,
             "action": "sell",
             "side": "short_open",
             "price": actual_price,
-            "amount": amount,
+            "amount": actual_amount,
             "fee": fee,
             "pnl": 0,
             "reason": reason
@@ -406,6 +439,7 @@ class BacktestEngine:
             "timestamp": timestamp,
             "instId": self.strategy.instId,
             "action": "sell",
+            "side": "long_close",
             "price": actual_price,
             "amount": self.position_amount,
             "fee": fee,
@@ -447,17 +481,40 @@ class BacktestEngine:
         returns = equity_series.pct_change().dropna()
         sharpe_ratio = returns.mean() / returns.std() * np.sqrt(365) if returns.std() > 0 else 0
 
-        sell_trades = [t for t in self.trades if t["action"] == "sell"]
-        winning_trades = [t for t in sell_trades if t["pnl"] > 0]
-        total_trades = len(sell_trades)
+        # 平仓交易统计（必须同时覆盖平多 action=sell 和平空 action=buy）
+        # 旧逻辑只取 action=="sell"，会把「开空」误算成一笔交易、且漏掉所有「平空」盈亏
+        def _is_close(t):
+            side = t.get("side")
+            if side is not None:
+                return side in ("long_close", "short_close")
+            return t["action"] == "sell"  # 兼容无 side 字段的旧记录
+
+        close_trades = [t for t in self.trades if _is_close(t)]
+        winning_trades = [t for t in close_trades if t["pnl"] > 0]
+        losing_trades = [t for t in close_trades if t["pnl"] < 0]
+        total_trades = len(close_trades)
         win_rate = len(winning_trades) / total_trades * 100 if total_trades > 0 else 0
 
-        if winning_trades and len([t for t in sell_trades if t["pnl"] < 0]) > 0:
+        if winning_trades and losing_trades:
             avg_win = np.mean([t["pnl"] for t in winning_trades])
-            avg_loss = np.mean([abs(t["pnl"]) for t in sell_trades if t["pnl"] < 0])
+            avg_loss = np.mean([abs(t["pnl"]) for t in losing_trades])
             profit_ratio = avg_win / avg_loss if avg_loss > 0 else 0
         else:
             profit_ratio = 0
+
+        # 多空分别统计
+        long_closes = [t for t in close_trades if t.get("side") == "long_close"]
+        short_closes = [t for t in close_trades if t.get("side") == "short_close"]
+        long_stats = {
+            "trades": len(long_closes),
+            "pnl": float(sum(t["pnl"] for t in long_closes)),
+            "wins": len([t for t in long_closes if t["pnl"] > 0]),
+        }
+        short_stats = {
+            "trades": len(short_closes),
+            "pnl": float(sum(t["pnl"] for t in short_closes)),
+            "wins": len([t for t in short_closes if t["pnl"] > 0]),
+        }
 
         total_pnl = sum([t["pnl"] for t in self.trades])
 
@@ -481,7 +538,9 @@ class BacktestEngine:
             "total_fee": sum([t["fee"] for t in self.trades]),
             "stop_stats": self.stop_stats,
             "mtf_blocked": self.mtf_blocked,
-            "regime_stats": regime_stats
+            "regime_stats": regime_stats,
+            "long_stats": long_stats,
+            "short_stats": short_stats
         }
 
     def get_equity_curve_df(self) -> pd.DataFrame:
@@ -492,6 +551,7 @@ class BacktestEngine:
             "timestamp": t["timestamp"],
             "instId": t["instId"],
             "action": t["action"],
+            "side": t.get("side", ""),
             "price": t["price"],
             "amount": t["amount"],
             "fee": t["fee"],

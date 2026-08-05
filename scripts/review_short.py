@@ -44,17 +44,21 @@ def check(name, cond):
 
 
 # ---- Test 1: 开空 balance / 平空 PnL ----
+# 注意：做空已改为与做多对等的 ATR 动态仓位，传入的 amount=10 会被重算：
+#   risk_amount = 10000*0.02 = 200; stop_distance = ATR5*2 = 10; amount = 200/10 = 20
+#   上限 max_amount = 10000*0.5/99.95 = 50.02 → 不截断，最终 amount=20
 e, strat = make_engine()
 e._open_position(PositionSide.SHORT, 100.0, 10.0, "t0", "open")
-# 开空成交价 = 100*(1-0.0005)=99.95; sell_value=999.5; fee=0.9995; balance=10000+999.5-0.9995=10998.5005
+# 开空成交价 = 100*(1-0.0005)=99.95; sell_value=20*99.95=1999; fee=1.999; balance=10000+1999-1.999=11997.001
 check("short: position_side==SHORT", e.position_side == PositionSide.SHORT)
-check("short: balance += cash on open", approx(e.balance, 10998.5005))
+check("short: ATR sizing applied (amount==20)", approx(e.position_amount, 20.0, 0.01))
+check("short: balance += cash on open", approx(e.balance, 11997.001, 0.1))
 e._close_current_position(90.0, "t1", "close")
-# 平空成交价 = 90*(1+0.0005)=90.045; buy_value=900.45; fee=0.90045; pnl=(99.95-90.045)*10=99.05
-# balance = 10998.5005 - 900.45 - 0.90045 = 10097.15005
+# 平空成交价 = 90*(1+0.0005)=90.045; buy_value=20*90.045=1800.9; fee=1.8009
+# pnl=(99.95-90.045)*20=198.1; balance = 11997.001-1800.9-1.8009 = 10194.30
 check("short: position_side reset on close", e.position_side == PositionSide.NONE)
-check("short: balance after close ~10097.15", approx(e.balance, 10097.15005, 0.1))
-check("short: recorded pnl ~99.05", abs(e.trades[-1]['pnl'] - 99.05) < 0.5)
+check("short: balance after close ~10194.30", approx(e.balance, 10194.30, 0.2))
+check("short: recorded pnl ~198.1", abs(e.trades[-1]['pnl'] - 198.1) < 0.5)
 check("short: close action is short_close", e.trades[-1]['side'] == 'short_close')
 
 # ---- Test 2: 空头止盈（价格下跌触发）----
@@ -106,8 +110,8 @@ e, strat = make_engine()
 e._open_position(PositionSide.SHORT, 100.0, 10.0, "t0", "open")
 e._record_equity(90.0, "t0")
 last = e.equity_curve[-1]
-# balance≈10998.5; pos_value = -10*90 = -900; equity≈10098.5
-check("short: equity reflects negative position value", approx(last['equity'], 10098.5, 1.0))
+# balance≈11997.0; pos_value = -20*90 = -1800; equity≈10197.0
+check("short: equity reflects negative position value", approx(last['equity'], 10197.0, 1.0))
 check("short: position_value negative", last['position_value'] < 0)
 
 # ---- Test 8: 端到端 run() 主循环信号路由（含翻转）----
@@ -144,11 +148,59 @@ se = BacktestEngine(ScriptedStrategy(sig_list), scfg)
 se.load_data(df)
 se.run()
 check("integ: has short_open trade (reverse happened)", any(t.get('side') == 'short_open' for t in se.trades))
-check("integ: has long close (sell, no side)", any(t['action'] == 'sell' and t.get('side') is None for t in se.trades))
+check("integ: has long close (side==long_close)",
+      any(t['action'] == 'sell' and t.get('side') == 'long_close' for t in se.trades))
 check("integ: ends flat after forced close at end", se.position_side == PositionSide.NONE)
 last_trade = se.trades[-1]
 check("integ: forced close of short at end (buy short_close)",
       last_trade['action'] == 'buy' and last_trade.get('side') == 'short_close')
+
+# ================= 第二轮修复的回归测试（2026-08-05）=================
+# 背景：上一版存在 5 个统计/仓位 bug，以下测试锁死修复结果
+
+# ---- Test 9: 多空仓位对等（同参数下 ATR 仓位应完全一致）----
+e1, _ = make_engine()
+e1._open_position(PositionSide.LONG, 100.0, 10.0, "t0", "open")
+e2, _ = make_engine()
+e2._open_position(PositionSide.SHORT, 100.0, 10.0, "t0", "open")
+# 多头成交价 100.05，空头 99.95，ATR 仓位公式相同 → amount 都应 = 20
+check("parity: long amount == short amount (ATR sizing)",
+      abs(e1.position_amount - e2.position_amount) < 0.01)
+
+# ---- Test 10: max_position_pct 对做空生效（名义价值上限）----
+cfg_cap = BacktestConfig(initial_balance=10000, fee_rate=0.001, slippage=0.0005,
+                         use_atr_risk=False, min_adx_for_entry=0.0, max_position_pct=0.1)
+strat_cap = DummyStrategy("D", "BTC-USDT")
+e_cap = BacktestEngine(strat_cap, cfg_cap)
+e_cap._open_position(PositionSide.SHORT, 100.0, 50.0, "t0", "open")  # 请求 50 币 = 5000 名义
+# 上限 = 10000 * 0.1 = 1000 名义 → amount ≈ 1000/99.95 ≈ 10.005
+check("cap: short notional capped by max_position_pct",
+      approx(e_cap.position_amount, 1000 / 99.95, 0.01))
+
+# ---- Test 11: 平空被计入 total_trades / win_rate（旧版漏统计）----
+cfg_st = BacktestConfig(initial_balance=10000, fee_rate=0.0, slippage=0.0,
+                        use_atr_risk=False, min_adx_for_entry=0.0, max_position_pct=1.0)
+e_st = BacktestEngine(DummyStrategy("D", "BTC-USDT"), cfg_st)
+e_st._open_position(PositionSide.SHORT, 100.0, 10.0, "t0", "open")
+e_st._close_current_position(90.0, "t1", "take_profit")   # 空头盈利 +100
+e_st._record_equity(90.0, "t1")
+perf = e_st._calculate_performance()
+check("stats: short close counted in total_trades", perf['total_trades'] == 1)
+check("stats: profitable short => win_rate 100%", approx(perf['win_rate'], 100.0, 0.01))
+check("stats: short_stats pnl positive", perf['short_stats']['pnl'] > 0)
+check("stats: short_stats trades == 1", perf['short_stats']['trades'] == 1)
+check("stats: long_stats trades == 0", perf['long_stats']['trades'] == 0)
+
+# ---- Test 12: 开空(action=sell,pnl=0) 不应被误计为一笔交易 ----
+e_op = BacktestEngine(DummyStrategy("D", "BTC-USDT"), cfg_st)
+e_op._open_position(PositionSide.SHORT, 100.0, 10.0, "t0", "open")
+e_op._record_equity(100.0, "t0")
+perf_op = e_op._calculate_performance()
+check("stats: open-only short => total_trades == 0", perf_op['total_trades'] == 0)
+
+# ---- Test 13: signal_sell / reverse 计数器不再恒为 0 ----
+check("stats: reverse counter incremented in run()", se.stop_stats['reverse'] >= 1)
+check("stats: end_of_backtest counter incremented", se.stop_stats['end_of_backtest'] >= 1)
 
 print("\n==== " + ("ALL TESTS PASSED" if ok else "SOME TESTS FAILED") + " ====")
 sys.exit(0 if ok else 1)
