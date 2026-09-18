@@ -207,7 +207,8 @@ class BacktestEngine:
                 "high": high,
                 "low": low,
                 "timestamp": timestamp,
-                "adx": self._current_adx()   # 预计算 ADX，供策略（如元策略）做市场状态判断，避免重复全量计算
+                "adx": self._current_adx(),   # 预计算 ADX，供策略（如元策略）做市场状态判断，避免重复全量计算
+                "market_bias": row.get("market_bias", None)  # 市场状态过滤序列（回测回放用，无则 None）
             })
             st = signal.signal_type
 

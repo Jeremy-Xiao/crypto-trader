@@ -73,6 +73,7 @@ class TestDataCleaning:
         # TODO: 实现后测试
         pass
     
+    @pytest.mark.skip(reason='测试自身统计错误：3σ过滤在5样本中无法滤除500（异常值拉大均值/std），且无被测实现')
     def test_extreme_filter(self):
         """测试极端值过滤"""
         prices = pd.Series([100, 102, 500, 103, 105])  # 500是异常值

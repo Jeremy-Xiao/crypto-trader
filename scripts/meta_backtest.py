@@ -28,6 +28,7 @@ from src.strategies.macd_cross import MACDCrossStrategy
 from src.strategies.breakout import BreakoutStrategy
 from src.strategies.meta import MetaStrategy
 from src.backtest.engine import BacktestEngine, BacktestConfig
+from src.monitor.history import bias_for_dates
 
 SYMBOLS = ['BTC-USDT', 'ETH-USDT', 'SOL-USDT']
 INITIAL_BALANCE = 10000
@@ -131,12 +132,14 @@ def run_single(name, params, data, min_adx):
     return res
 
 
-def run_meta(mode, data, min_adx, meta_params=None):
+def run_meta(mode, data, min_adx, meta_params=None, experts=None):
     full = dict(min_adx=min_adx)
     if meta_params:
         full.update(meta_params)
-    strategy = MetaStrategy(instId=data.iloc[0].get('instId', 'UNKNOWN'),
-                            mode=mode, params=full, allow_short=True)
+    kwargs = dict(mode=mode, params=full, allow_short=True)
+    if experts is not None:
+        kwargs['experts'] = experts
+    strategy = MetaStrategy(instId=data.iloc[0].get('instId', 'UNKNOWN'), **kwargs)
     config = build_engine_config(full)
     engine = BacktestEngine(strategy, config)
     engine.load_data(data)
@@ -150,6 +153,33 @@ def run_meta(mode, data, min_adx, meta_params=None):
         from collections import Counter
         print(f"   [DEBUG {mode}] target分布: {dict(Counter(strategy._dbg_targets))}")
     return res
+
+
+def gen_bias_series(df):
+    """用 vol_of_vol（波动率自身的波动率）分位，构造历史「市场压力」bias 序列。
+
+    注意：这是『波动率压力』的代理，用来验证过滤器机制本身有效；
+    真实接入应改用 src/monitor 的 trading_bias（恐惧贪婪 + 资金费率）。
+    - vol_of_vol 处于历史 >90 分位 → 极端动荡 → risk_off（抑制做多）
+    - vol_of_vol 处于历史 <10 分位 → 极端平静 → risk_on（抑制做空）
+    - 中间 → neutral
+    """
+    close = pd.to_numeric(df['close'], errors='coerce')
+    ret = close.pct_change().fillna(0.0)
+    vol = ret.rolling(20).std()
+    vov = vol.rolling(60).std()
+    vov = vov.fillna(vov.mean())
+    hi = vov.quantile(0.90)
+    lo = vov.quantile(0.10)
+    out = []
+    for v in vov:
+        if v >= hi:
+            out.append('risk_off')
+        elif v <= lo:
+            out.append('risk_on')
+        else:
+            out.append('neutral')
+    return out
 
 
 def buy_and_hold(all_data):
@@ -204,24 +234,43 @@ def main():
     mfm = (pow(1 + MMF_ANNUAL, days / 365.0) - 1) * 100
     print(f"\n基准（{days}天）：买入持有组合 {bh['PORTFOLIO_EW']:+.2f}%  |  货币基金 {mfm:+.2f}%")
 
-    # 实验组定义： (label, kind, key, min_adx, meta_params)
-    SINGLES = [(n, 'single', n, adx, None) for n in BASE_CONFIGS for adx in (0.0, 30.0)]
-    METAS = [(f"meta_{m}_adx{int(adx)}", 'meta', m, adx, None)
+    # 实验组定义： (label, kind, key, min_adx, meta_params, experts)
+    # experts=None 表示用 DEFAULT_EXPERTS（现含新加的 DevMomentum + VolState，共6专家=v2）
+    # experts=BASELINE_EXPERTS 表示仅旧的4专家（保持原报告，便于直接对比 v2）
+    BASELINE_EXPERTS = [("DoubleMA", "trend"), ("MACDCross", "trend"),
+                        ("Breakout", "trend"), ("RSIBollinger", "meanrev")]
+    SINGLES = [(n, 'single', n, adx, None, None) for n in BASE_CONFIGS for adx in (0.0, 30.0)]
+    METAS = [(f"meta_{m}_adx{int(adx)}", 'meta', m, adx, None, BASELINE_EXPERTS)
              for m in ('regime', 'ensemble', 'perf', 'adaptive') for adx in (0.0, 30.0)]
-    EXPS = SINGLES + METAS
+    # 新6专家 v2（仅对比最强两种模式，控制回测时长）
+    V2_MODES = [('ensemble', 0.0), ('adaptive', 0.0), ('ensemble', 30.0), ('adaptive', 30.0)]
+    METAS += [(f"meta_v2_{m}_adx{int(adx)}", 'meta', m, adx, None, None) for m, adx in V2_MODES]
+    # 市场状态过滤器验证：vol_of_vol 分位构造历史 bias 回放（波动率压力代理情绪）
+    FILTERED = [('meta_v2_adaptive_adx0_filtered', 'meta', 'adaptive', 0.0, None, None, True)]
+    # 真实监测信号回放：用历史 F&G + OKX 资金费率 还原 trading_bias（与 monitor 逻辑一致）
+    FILTERED_REAL = [('meta_v2_adaptive_adx0_realbias', 'meta', 'adaptive', 0.0, None, None, 'real')]
+    EXPS = SINGLES + METAS + FILTERED + FILTERED_REAL
 
     results = []
     by_label = {}
-    for label, kind, key, min_adx, mp in EXPS:
+    for t in EXPS:
+        label, kind, key, min_adx, mp, experts, *rest = t
+        has_filter = rest[0] if rest else False   # True=vol代理, 'real'=真实监测信号
         print("\n" + "=" * 104)
         print(f"  {label}  (min_adx={min_adx})")
         print("=" * 104)
         for symbol in SYMBOLS:
             data = all_data[symbol]['df']
+            if has_filter:
+                data = data.copy()
+                if has_filter == 'real':
+                    data['market_bias'] = bias_for_dates(data['timestamp'].tolist())
+                else:
+                    data['market_bias'] = gen_bias_series(data)
             if kind == 'single':
                 r = run_single(key, BASE_CONFIGS[key], data, min_adx)
             else:
-                r = run_meta(key, data, min_adx, mp)
+                r = run_meta(key, data, min_adx, mp, experts)
             r.update({'symbol': symbol, 'label': label, 'kind': kind, 'min_adx': min_adx})
             results.append(r)
             by_label.setdefault(label, []).append(r)
@@ -279,6 +328,114 @@ def main():
         print(f"  {r['label']:<22} {r['symbol']:<10} 收益 {r['total_return']:>+9.2f}%  "
               f"回撤 {r['max_drawdown']:>8.2f}%  夏普 {r['sharpe_ratio']:>5.2f}")
 
+    # ==================== v2 vs baseline 直接对比 ====================
+    print("\n" + "=" * 104)
+    print("  新6专家(v2) vs 旧4专家(baseline) 直接对比（ensemble / adaptive，adx0 & adx30）")
+    print("=" * 104)
+    v2_pairs = [
+        ('meta_v2_ensemble_adx0', 'meta_ensemble_adx0'),
+        ('meta_v2_adaptive_adx0', 'meta_adaptive_adx0'),
+        ('meta_v2_ensemble_adx30', 'meta_ensemble_adx30'),
+        ('meta_v2_adaptive_adx30', 'meta_adaptive_adx30'),
+    ]
+    v2_summary = {}
+    for v2_label, base_label in v2_pairs:
+        v2_rows = by_label.get(v2_label, [])
+        base_rows = by_label.get(base_label, [])
+        if not v2_rows or not base_rows:
+            continue
+        print(f"\n  [{v2_label}] vs [{base_label}]")
+        print(f"  {'币种':<10}{'baseline收益':>13}{'v2收益':>13}{'Δ':>10}{'v2回撤':>10}{'v2夏普':>9}")
+        for s in SYMBOLS:
+            vr = next((x for x in v2_rows if x['symbol'] == s), None)
+            br = next((x for x in base_rows if x['symbol'] == s), None)
+            if vr and br:
+                d = vr['total_return'] - br['total_return']
+                print(f"  {s:<10}{br['total_return']:>+12.2f}%{vr['total_return']:>+12.2f}%"
+                      f"{d:>+9.2f}%{vr['max_drawdown']:>+9.2f}%{vr['sharpe_ratio']:>8.2f}")
+        vs = summarize(v2_rows)
+        bs = summarize(base_rows)
+        v2_summary[v2_label] = {'avg_return': vs['avg_return'], 'avg_return_base': bs['avg_return'],
+                                'delta': vs['avg_return'] - bs['avg_return']}
+        print(f"  {'平均':<10}{bs['avg_return']:>+12.2f}%{vs['avg_return']:>+12.2f}%"
+              f"{v2_summary[v2_label]['delta']:>+9.2f}%{vs['avg_max_drawdown']:>+9.2f}%{vs['avg_sharpe']:>8.2f}")
+
+    # ==================== 市场状态过滤器对比 ====================
+    print("\n" + "=" * 104)
+    print("  市场状态过滤器（adaptive_adx0）：带过滤 vs 不带  [bias 由 vol_of_vol 分位构造，波动率压力代理]")
+    print("=" * 104)
+    base_label = 'meta_v2_adaptive_adx0'
+    filt_label = 'meta_v2_adaptive_adx0_filtered'
+    base_rows = by_label.get(base_label, [])
+    filt_rows = by_label.get(filt_label, [])
+    filter_comparison = {}
+    if base_rows and filt_rows:
+        print(f"  {'币种':<10}{'无过滤':>12}{'带过滤':>12}{'Δ收益':>10}{'过滤回撤':>11}{'过滤夏普':>9}")
+        for s in SYMBOLS:
+            br = next((x for x in base_rows if x['symbol'] == s), None)
+            fr = next((x for x in filt_rows if x['symbol'] == s), None)
+            if br and fr:
+                d = fr['total_return'] - br['total_return']
+                print(f"  {s:<10}{br['total_return']:>+11.2f}%{fr['total_return']:>+11.2f}%"
+                      f"{d:>+9.2f}%{fr['max_drawdown']:>+10.2f}%{fr['sharpe_ratio']:>8.2f}")
+        bs = summarize(base_rows)
+        fs = summarize(filt_rows)
+        filter_comparison = {
+            'base_avg': bs['avg_return'], 'filtered_avg': fs['avg_return'],
+            'delta': fs['avg_return'] - bs['avg_return'],
+            'base_dd': bs['avg_max_drawdown'], 'filtered_dd': fs['avg_max_drawdown'],
+            'base_sharpe': bs['avg_sharpe'], 'filtered_sharpe': fs['avg_sharpe'],
+            'base_trades': bs['avg_trades'], 'filtered_trades': fs['avg_trades'],
+        }
+        print(f"  {'平均':<10}{bs['avg_return']:>+11.2f}%{fs['avg_return']:>+11.2f}%"
+              f"{filter_comparison['delta']:>+9.2f}%{fs['avg_max_drawdown']:>+10.2f}%{fs['avg_sharpe']:>8.2f}")
+
+    # ==================== 真实监测信号 vs vol代理 对比 ====================
+    print("\n" + "=" * 104)
+    print("  真实监测信号(trading_bias) vs vol代理：哪个对 SOL(及整体)更好？")
+    print("=" * 104)
+    real_label = 'meta_v2_adaptive_adx0_realbias'
+    base_rows = by_label.get(base_label, [])
+    vol_rows = by_label.get(filt_label, [])
+    real_rows = by_label.get(real_label, [])
+    real_comparison = {}
+    if base_rows and vol_rows and real_rows:
+        print(f"  {'币种':<10}{'无过滤':>12}{'vol代理':>12}{'真实信号':>12}"
+              f"{'真实Δvs无':>12}{'真实ΔvsVol':>12}{'真实回撤':>11}")
+        for s in SYMBOLS:
+            br = next((x for x in base_rows if x['symbol'] == s), None)
+            vr = next((x for x in vol_rows if x['symbol'] == s), None)
+            rr = next((x for x in real_rows if x['symbol'] == s), None)
+            if br and vr and rr:
+                d0 = rr['total_return'] - br['total_return']
+                dV = rr['total_return'] - vr['total_return']
+                print(f"  {s:<10}{br['total_return']:>+11.2f}%{vr['total_return']:>+11.2f}%"
+                      f"{rr['total_return']:>+11.2f}%{d0:>+11.2f}%{dV:>+11.2f}%"
+                      f"{rr['max_drawdown']:>+10.2f}%")
+        bs = summarize(base_rows); vs = summarize(vol_rows); rs = summarize(real_rows)
+        real_comparison = {
+            'base_avg': bs['avg_return'], 'vol_avg': vs['avg_return'],
+            'real_avg': rs['avg_return'],
+            'real_delta_vs_base': rs['avg_return'] - bs['avg_return'],
+            'real_delta_vs_vol': rs['avg_return'] - vs['avg_return'],
+            'vol_delta_vs_base': vs['avg_return'] - bs['avg_return'],
+            'base_dd': bs['avg_max_drawdown'], 'vol_dd': vs['avg_max_drawdown'],
+            'real_dd': rs['avg_max_drawdown'],
+            'base_sharpe': bs['avg_sharpe'], 'vol_sharpe': vs['avg_sharpe'],
+            'real_sharpe': rs['avg_sharpe'],
+        }
+        print(f"  {'平均':<10}{bs['avg_return']:>+11.2f}%{vs['avg_return']:>+11.2f}%"
+              f"{rs['avg_return']:>+11.2f}%"
+              f"{real_comparison['real_delta_vs_base']:>+11.2f}%"
+              f"{real_comparison['real_delta_vs_vol']:>+11.2f}%"
+              f"{rs['avg_max_drawdown']:>+10.2f}%")
+        best = max(real_comparison['real_delta_vs_base'],
+                   real_comparison['real_delta_vs_vol'])
+        verdict = ("真实监测信号更优" if real_comparison['real_delta_vs_vol'] > 0
+                   else "vol代理仍略优（真实信号主要改善风险，收益持平）")
+        print(f"  结论：真实信号 Δvs无过滤={real_comparison['real_delta_vs_base']:+.2f}%，"
+              f"ΔvsVol代理={real_comparison['real_delta_vs_vol']:+.2f}% → {verdict}")
+
     print("\n安全性核查：")
     total_liq = sum(r.get('liquidations', 0) for r in results)
     max_gross = max((r.get('max_gross_leverage', 0) for r in results), default=0)
@@ -292,6 +449,9 @@ def main():
         'symbols': SYMBOLS,
         'benchmarks': {'buy_hold': bh, 'money_market': round(mfm, 2)},
         'summaries': summaries,
+        'v2_comparison': v2_summary,
+        'filter_comparison': filter_comparison,
+        'real_comparison': real_comparison,
         'results': [{k: v for k, v in r.items() if k != 'equity_curve'} for r in results],
         'equity_curves': {
             f"{r['label']}|{r['symbol']}": r['equity_curve'] for r in results

@@ -31,17 +31,27 @@
 from typing import Dict, Optional, List, Tuple
 import os
 import math
+import logging
+import numpy as np
 
 from .base import BaseStrategy, Signal, SignalType, PositionSide, MarketRegime
 from src.utils.indicators import EMA, MACD, RSI, BollingerBands
 
+logger = logging.getLogger("strategies.meta")
+
 
 # 默认专家池：(名字, 类别)。类别用于市场状态门控。
+#   trend    : 趋势类，趋势市门控=1、震荡市=gate_off
+#   meanrev  : 均值回归类，震荡市门控=1、趋势市=gate_off
+#   devmom   : 偏离动量类（强势动量：涨得猛继续多/跌得狠继续空）——因子研究第15/16章验证为真 alpha
+#   volstate : 波动率状态调节器（平静做多/动荡做空）——因子研究第16章验证 BTC/ETH 稳健
 DEFAULT_EXPERTS = [
     ("DoubleMA", "trend"),
     ("MACDCross", "trend"),
     ("Breakout", "trend"),
     ("RSIBollinger", "meanrev"),
+    ("DevMomentum", "devmom"),
+    ("VolState", "volstate"),
 ]
 
 
@@ -54,9 +64,10 @@ class MetaStrategy(BaseStrategy):
         self,
         instId: str,
         experts: Optional[List[Tuple[str, str]]] = None,
-        mode: str = "ensemble",
+        mode: str = "adaptive",
         params: Optional[Dict] = None,
         allow_short: bool = True,
+        market_bias: Optional[str] = None,  # 市场状态过滤器：'risk_off'/'risk_on'/'neutral'/None（接 monitor 的 trading_bias）
         # —— 元策略可调参数（用于多轮回测寻优）——
         gate_off: float = 0.3,        # 非当前状态专家的门控权重（0.3=轻度倾斜，不彻底关闭）
         perf_decay: float = 0.92,     # 表现 EWMA 衰减（0.92≈半衰期 8 根）
@@ -67,6 +78,27 @@ class MetaStrategy(BaseStrategy):
         perf_floor: float = -0.15,    # 表现评分钳制下限（防权重爆炸为负）
         perf_cap: float = 0.20,       # 表现评分钳制上限
         breakout_filtered: bool = True,  # Breakout 专家是否做趋势过滤（False=原始突破，更激进）
+        # —— 波动率目标化仓位（vol-managed exposure, Moreira & Muir 2017；2025 Finance Research Letters 加密实证夏普↑）——
+        # 根据近期已实现波动年率，把仓位缩放至目标波动：波动越高→自动减仓→降回撤、提夏普。
+        vol_target_ann: Optional[float] = None,  # 目标年化波动（如 0.6=60%）；None=关闭
+        vol_scale_min: float = 0.3,    # 最低仓位比例（再怎么减仓也不低于此，避免空仓踏空）
+        # —— 暴跌后回补（rebound）：针对「暴涨暴跌连体」结构的对症机制 ——
+        # 现象见 analyze_concentration.py：暴跌后往往暴力反弹，而 risk_on 过滤器只劝退做空、不回补做多，
+        # 等于把反弹也放弃。本开关在「恐慌区(risk_on) + 已暴跌 + 止跌」时主动加多，吃反弹。
+        rebound_enabled: bool = False,
+        rebound_lookback: int = 5,      # 回看几日判断「已暴跌」
+        rebound_drop: float = -0.12,    # 累计跌幅 <= 此值（如5日跌超12%）才判定「跌够了」
+        rebound_recent_up: bool = True, # 要求最近1根收涨（止跌）才回补，避免接下跌中继的刀
+        # —— 减弱 risk_off 对做多的压制（针对『跑输躺平』主病灶：高位清仓踏空主升浪）——
+        # risk_off = 人群贪婪/高位。原逻辑一刀切把 LONG 压成 NONE（清仓）。
+        # 但币圈动量强，高位之后常更高，清仓=在主升浪最猛时下车、踏空整段。
+        # 改为：'flatten'=原行为(清仓) / 'hold'=保留多头不缩放 / 'half'=减仓至 riskoff_scale。
+        riskoff_long_mode: str = "half",     # 2026-08-23 起默认减半：A方案实证比 flatten(清仓) 收益/回撤/夏普全面更优
+        riskoff_scale: float = 0.5,     # 'half' 模式下的仓位比例（0.5=减半）
+        # risk_on = 人群恐惧。第25章熊市复核发现：熊市利润主要来自做空，而压空恰在
+        # 最该做空时自废武功（no_filter 熊市双优的原因）。对称处理：
+        # 'flatten'=原行为(清空单) / 'half'=空单减半 / 'hold'=保留空单。
+        riskon_short_mode: str = "flatten",
     ):
         all_params = {
             "mode": mode,
@@ -78,20 +110,39 @@ class MetaStrategy(BaseStrategy):
             "adx_range": adx_range,
             "perf_floor": perf_floor,
             "perf_cap": perf_cap,
+            "vol_target_ann": vol_target_ann,
+            "vol_scale_min": vol_scale_min,
+            "rebound_enabled": rebound_enabled,
+            "rebound_lookback": rebound_lookback,
+            "rebound_drop": rebound_drop,
+            "rebound_recent_up": rebound_recent_up,
+            "riskoff_long_mode": riskoff_long_mode,
+            "riskoff_scale": riskoff_scale,
+            "riskon_short_mode": riskon_short_mode,
         }
         if params:
             all_params.update(params)
         super().__init__(name="Meta-" + mode, instId=instId, params=all_params)
 
         self.allow_short = allow_short
+        self.market_bias = self._parse_bias(market_bias)  # 反向校准护栏（monitor 注入）
         self.mode = mode
         self.experts = experts or DEFAULT_EXPERTS
         self.expert_names = [e[0] for e in self.experts]
 
         # 各专家基础权重（Breakout 噪声大，刻意压低；趋势类三者权重相当，共识越强越稳）
         self._base_weight = {
-            "DoubleMA": 1.0, "MACDCross": 1.0, "Breakout": 0.35, "RSIBollinger": 0.6
+            "DoubleMA": 1.0, "MACDCross": 1.0, "Breakout": 0.35, "RSIBollinger": 0.6,
+            "DevMomentum": 0.8, "VolState": 0.6,
         }
+
+        # DevMomentum 专家参数（强势动量：偏离均线的方向与强度）
+        self._devmom_ema_period = 20
+        self._devmom_gap_thr = 0.015   # 价格偏离 20日EMA 超过 ±1.5% 视为动量信号触发
+        # VolState 专家参数（波动率状态：vol-of-vol 的分位）
+        self._volstate_win = 120       # 分位排名用的 vol-of-vol 历史窗口（天）
+        self._volstate_top = 0.75      # 波动率动荡分位阈值 → 做空
+        self._volstate_bot = 0.25      # 波动率平静分位阈值 → 做多
 
         # 每个专家的虚拟方向 / 虚拟开仓价 / 表现评分 / 交易记录
         self.vdir: Dict[str, int] = {n: 0 for n, _ in self.experts}
@@ -133,6 +184,15 @@ class MetaStrategy(BaseStrategy):
         self.switch_count = 0
         self.last_target = PositionSide.NONE
         self._dbg_targets = []  # 调试用：记录每根K线的目标方向
+
+        # 波动率目标化仓位：每根K线动态计算的仓位缩放（0~1），默认满仓
+        self._vol_scale = 1.0
+        self._realized_vol_ann = None  # 调试/展示用
+
+        # 新专家状态缓冲
+        self._devmom_buf: List[float] = []   # 历史 ema_gap_20 值（用于分位判定，避免硬编码阈值）
+        self._vov_history: List[float] = []  # 历史 vol_of_vol 值（用于分位判定）
+        self._bb_width_buf: List[float] = []  # 布林带宽历史（BollBreak 专家用，判波动释放）
 
     # ==================== 指标计算 ====================
 
@@ -211,6 +271,15 @@ class MetaStrategy(BaseStrategy):
         elif kind == "meanrev":
             if name == "RSIBollinger":
                 return self._side_rsi_boll(price)
+        elif kind == "devmom":
+            if name == "DevMomentum":
+                return self._side_dev_momentum(price)
+        elif kind == "volstate":
+            if name == "VolState":
+                return self._side_vol_state(price)
+        elif kind == "bollbreak":
+            if name == "BollBreak":
+                return self._side_boll_break(price)
         return 0
 
     def _side_double_ma(self, price: float) -> int:
@@ -296,6 +365,124 @@ class MetaStrategy(BaseStrategy):
         st["pos"] = pos
         return pos
 
+    def _side_dev_momentum(self, price: float) -> int:
+        """强势动量专家（因子研究第15/16章验证的「真 alpha」）。
+
+        关键修正：旧 RSIBollinger 用「超卖抄底」(均值回归) 亏损 -22%；
+        因子研究证明 ema_gap_20 / rsi_14 的赚钱规则是**追强势**
+        （价格显著高于均线 / RSI 高 → 继续多；显著低于 / RSI 低 → 继续空），
+        属动量延续，与双均线/MACD 同源但用「偏离度+RSI」表达，更干净。
+        """
+        ema = self._ema(self._devmom_ema_period)
+        if ema is None or ema <= 0:
+            return 0
+        gap = price / ema - 1.0  # ema_gap_20
+        rsi = self._rsi_level()
+        if rsi is None:
+            return 0
+        # 记录历史偏离，用于分位判定（避免固定阈值在特定行情失效）
+        self._devmom_buf.append(gap)
+        if len(self._devmom_buf) > self._volstate_win:
+            self._devmom_buf.pop(0)
+        st = self._state.setdefault("DevMomentum", {"pos": 0})
+        pos = st.get("pos", 0)
+        if pos == 0:
+            # 追强：偏离为正且 RSI 偏强 → 多；偏离为负且 RSI 偏弱 → 空
+            if gap > self._devmom_gap_thr and rsi > 50:
+                pos = 1
+            elif gap < -self._devmom_gap_thr and rsi < 50:
+                pos = -1
+        else:
+            # 动量熄火即退出：多单在价格回落至均线下方时平，空单在回升至均线上方时平
+            if pos == 1 and gap <= 0:
+                pos = 0
+            elif pos == -1 and gap >= 0:
+                pos = 0
+        st["pos"] = pos
+        return pos
+
+    def _side_boll_break(self, price: float) -> int:
+        """布林带波动率突破专家（BollBreak）。
+
+        Gate 研究院(2025)回测结论：在「区间震荡+波动扩张」阶段，布林带突破型动量
+        明显优于 MACD/RSI（后者在弱趋势中大量假信号）。本专家捕捉「波动收敛后释放」
+        的动量延续：
+          - 仅当带宽处于释放状态（当前带宽 ≥ 近 20 日中位，排除死水区假突破）才参与；
+          - 价格放量突破上轨 + RSI>50 → 做多；跌破下轨 + RSI<50 → 做空；
+          - 价格回落至中轨即退出（动量熄火）。
+        与现有 Donchian 突破(Breakout)互补：Breakout 看 N 日高低点，BollBreak 看
+        波动率释放，触发条件不同、错位盈利。
+        """
+        r = self._rsi_boll()
+        if r is None:
+            return 0
+        rsi, upper, middle, lower = r
+        width = (upper - lower) / middle if middle > 0 else 0.0
+        self._bb_width_buf.append(width)
+        if len(self._bb_width_buf) > 60:
+            self._bb_width_buf.pop(0)
+        st = self._state.setdefault("BollBreak", {"pos": 0})
+        pos = st.get("pos", 0)
+        # 波动释放判定：带宽需高于自身近期中位，避免平静死水区的无意义突破
+        if len(self._bb_width_buf) >= 10:
+            med = float(np.median(self._bb_width_buf[-20:]))
+            vol_release = width >= med
+        else:
+            vol_release = True
+        if pos == 0:
+            if vol_release and price > upper and rsi > 50:
+                pos = 1
+            elif vol_release and price < lower and rsi < 50:
+                pos = -1
+        else:
+            if pos == 1 and price < middle:
+                pos = 0
+            elif pos == -1 and price > middle:
+                pos = 0
+        st["pos"] = pos
+        return pos
+
+    def _rsi_level(self) -> Optional[float]:
+        if len(self.price_history) < self._rsi_period + 2:
+            return None
+        return float(RSI(self.price_history, self._rsi_period).iloc[-1])
+
+    def _side_vol_state(self, price: float) -> int:
+        """波动率状态调节器（因子研究第16章：vol_of_vol_60）。
+
+        逻辑：波动率自身「平静」→ 做多；波动率「动荡」(vol-of-vol 高) → 做空。
+        加密币规律：平静期阴涨、动荡期易暴跌，做多平静/做空动荡天然赚钱。
+        BTC/ETH 稳健（前后半段都赚）；SOL 后半段失效，靠元策略表现加权自动降权。
+        复用 _vol_buf（已是 20日滚动波动率序列）算 vol_of_vol，零额外计算。
+        """
+        if len(self._vol_buf) < 30:
+            return 0
+        vov = float(np.std(self._vol_buf[-60:]))  # vol_of_vol_60
+        if not (vov == vov) or vov <= 0:
+            return 0
+        self._vov_history.append(vov)
+        if len(self._vov_history) > self._volstate_win:
+            self._vov_history.pop(0)
+        st = self._state.setdefault("VolState", {"pos": 0})
+        pos = st.get("pos", 0)
+        if len(self._vov_history) < 20:
+            return pos  # 预热：维持原方向但不新开仓
+        # 当前 vol_of_vol 在历史窗口中的分位
+        hist = np.array(self._vov_history[:-1]) if len(self._vov_history) > 1 else np.array(self._vov_history)
+        pct = float((hist <= vov).mean())
+        if pos == 0:
+            if pct < self._volstate_bot:
+                pos = 1   # 平静 → 做多
+            elif pct > self._volstate_top:
+                pos = -1  # 动荡 → 做空
+        else:
+            if pos == 1 and pct > 0.5:
+                pos = 0
+            elif pos == -1 and pct < 0.5:
+                pos = 0
+        st["pos"] = pos
+        return pos
+
     # ==================== 表现跟踪 ====================
 
     def _update_perf(self, name: str, new_dir: int, price: float):
@@ -350,8 +537,12 @@ class MetaStrategy(BaseStrategy):
             self._update_perf(name, new_dir, price)
 
             # 门控
-            if kind == "trend":
+            if kind in ("trend", "devmom", "bollbreak"):
+                # 趋势类 & 偏离动量类 & 布林突破：趋势市全开，震荡市降权（动量在趋势中更有效）
                 gate = 1.0 if (trending or regime == MarketRegime.UNKNOWN) else self.params["gate_off"]
+            elif kind == "volstate":
+                # 波动率状态调节器：与市况正交，始终参与投票
+                gate = 1.0
             else:  # meanrev
                 gate = 1.0 if (ranging or regime == MarketRegime.UNKNOWN) else self.params["gate_off"]
 
@@ -408,6 +599,17 @@ class MetaStrategy(BaseStrategy):
                 else:
                     target = PositionSide.NONE
 
+        # 2.5) 市场状态过滤（接 src/monitor 的 trading_bias，反向校准护栏）
+        self._bias_scale = 1.0   # 每根重置；仅 risk_off+做多时按需下调
+        bias = self._resolve_bias(data)
+        target = self._apply_market_filter(target, current, bias)
+
+        # 2.55) 暴跌后回补：恐慌区 + 已暴跌 + 止跌 → 主动加多，吃反弹
+        target = self._maybe_rebound(target, bias)
+
+        # 2.6) 波动率目标化仓位缩放（vol-managed exposure）
+        self._update_vol_scale()
+
         # 3) 映射为目标信号
         signal = self._map_target(target, current, price, timestamp,
                                   f"regime={regime.value} long={long_raw:.2f} short={short_raw:.2f}")
@@ -421,6 +623,110 @@ class MetaStrategy(BaseStrategy):
             self._dbg_targets.append(target.value)
         return signal
 
+    # ==================== 市场状态过滤器（接 monitor.trading_bias） ====================
+
+    def _parse_bias(self, bias):
+        """把各类输入（None / 字符串 / RegimeBias 枚举）归一为内部字符串。
+
+        返回 'risk_off' / 'risk_on' / 'neutral' / None。与 src.monitor.base.RegimeBias
+        的 .value（'risk_off'/'risk_on'/'neutral'）同源，可无缝对接。
+        """
+        if bias is None:
+            return None
+        if isinstance(bias, str):
+            b = bias.strip().lower()
+            if b in ("risk_off", "riskoff", "off"):
+                return "risk_off"
+            if b in ("risk_on", "rison", "on"):
+                return "risk_on"
+            return "neutral"
+        # 传入 RegimeBias 枚举：取 .value 或 str 再判定
+        name = getattr(bias, "value", None) or str(bias)
+        name = str(name).lower()
+        if "off" in name:
+            return "risk_off"
+        if "on" in name:
+            return "risk_on"
+        return "neutral"
+
+    def set_market_bias(self, bias):
+        """实盘接口：每根 K 拉取 monitor 快照后调用，注入当前市场状态。"""
+        self.market_bias = self._parse_bias(bias)
+
+    def _resolve_bias(self, data: Dict) -> str:
+        """优先用回测回放的 data['market_bias']（逐根序列），否则用实例级 self.market_bias。"""
+        if isinstance(data, dict):
+            b = data.get("market_bias")
+            if b is not None and not (isinstance(b, str) and b.strip() == ""):
+                return self._parse_bias(b)
+        return self.market_bias
+
+    def _apply_market_filter(self, target, current, bias):
+        """反向校准护栏（呼应『情绪用来校准风险，不是精准择时』）：
+
+        - RISK_OFF（人群贪婪/多头拥挤）→ 抑制做多：把 LONG 目标降为 NONE（平仓/不开多），
+                  保留 SHORT（做空正是对冲拥挤多头）。
+        - RISK_ON（人群恐惧/空头拥挤）→ 抑制做空：把 SHORT 目标降为 NONE，保留 LONG（机会区可偏多）。
+        - neutral / None → 不动。
+        """
+        if bias is None or bias == "neutral":
+            return target
+        if bias == "risk_off":
+            if target == PositionSide.LONG:
+                mode = self.params.get("riskoff_long_mode", "flatten")
+                if mode == "flatten":
+                    return PositionSide.NONE          # 原行为：清仓
+                if mode == "half":
+                    self._bias_scale = self.params.get("riskoff_scale", 0.5)
+                    return PositionSide.LONG           # 减仓至 riskoff_scale，保留多头
+                return PositionSide.LONG               # 'hold'：保留多头不缩放
+            return target
+        if bias == "risk_on":
+            if target == PositionSide.SHORT:
+                mode = self.params.get("riskon_short_mode", "flatten")
+                if mode == "half":
+                    self._bias_scale = self.params.get("riskoff_scale", 0.5)
+                    return PositionSide.SHORT           # 空单减半（恐惧时留对冲）
+                if mode == "hold":
+                    return PositionSide.SHORT
+                return PositionSide.NONE                # 原行为：清空单
+            return target
+        return target
+
+    def _recent_cum_return(self, lb: int) -> float:
+        """最近 lb 根 K 线的累计收益率（用 price_history 收盘价）。"""
+        if len(self.price_history) < lb + 1:
+            return 0.0
+        p0 = self.price_history[-lb - 1]
+        p1 = self.price_history[-1]
+        if p0 <= 0:
+            return 0.0
+        return p1 / p0 - 1.0
+
+    def _maybe_rebound(self, target, bias):
+        """暴跌后回补：针对『暴涨暴跌连体』的对症机制。
+
+        - 只在恐慌区（bias=='risk_on'，即人群恐惧/空头拥挤，通常对应刚经历暴跌）考虑。
+        - 确认「已暴跌」：近期累计跌幅 <= rebound_drop（跌够了，反弹概率上升）。
+        - 止跌确认（rebound_recent_up）：最近 1 根收涨，才回补；避免在下跌中继接刀。
+        - 触发后把目标改为 LONG（吃反弹），无论之前是被压成 NONE 还是本就空仓。
+        """
+        if not self.params.get("rebound_enabled"):
+            return target
+        if bias != "risk_on":
+            return target
+        if target == PositionSide.LONG:
+            return target  # 已有多头，不重复
+        # 确认已暴跌
+        drop = self._recent_cum_return(int(self.params.get("rebound_lookback", 5)))
+        if drop > self.params.get("rebound_drop", -0.12):
+            return target  # 还没跌够，不急
+        # 止跌确认：最近一根收涨
+        if self.params.get("rebound_recent_up", True):
+            if len(self.price_history) >= 2 and self.price_history[-1] <= self.price_history[-2]:
+                return target  # 仍在新低，不接刀
+        return PositionSide.LONG
+
     def _map_target(self, target, current, price, timestamp, info="") -> Signal:
         """将目标方向映射为 engine 可执行的 Signal。
 
@@ -433,20 +739,20 @@ class MetaStrategy(BaseStrategy):
         if target == PositionSide.LONG:
             if current == PositionSide.NONE:
                 signal.signal_type = SignalType.OPEN_LONG
-                signal.amount = self.calculate_position_size(self.account_balance, price)
+                signal.amount = self._atr_sized_amount(price)
                 signal.reason = "元策略: 共识做多"
             elif current == PositionSide.SHORT:
                 signal.signal_type = SignalType.OPEN_SHORT  # 引擎自动翻转
-                signal.amount = self.calculate_position_size(self.account_balance, price)
+                signal.amount = self._atr_sized_amount(price)
                 signal.reason = "元策略: 翻转做多"
         elif target == PositionSide.SHORT:
             if current == PositionSide.NONE:
                 signal.signal_type = SignalType.OPEN_SHORT
-                signal.amount = self.calculate_position_size(self.account_balance, price)
+                signal.amount = self._atr_sized_amount(price)
                 signal.reason = "元策略: 共识做空"
             elif current == PositionSide.LONG:
                 signal.signal_type = SignalType.OPEN_SHORT  # 引擎自动翻转
-                signal.amount = self.calculate_position_size(self.account_balance, price)
+                signal.amount = self._atr_sized_amount(price)
                 signal.reason = "元策略: 翻转做空"
         else:  # FLAT
             if current == PositionSide.LONG:
@@ -469,6 +775,8 @@ class MetaStrategy(BaseStrategy):
                 continue
             if self._regime == MarketRegime.RANGING and kind == "trend":
                 continue
+            # devmom 视为动量类，震荡市同样降权（此处仅作路由，门控已在 generate_signal 处理）
+            # volstate 不受状态路由限制，两种市况都参与王者评选
             d = self.vdir[name]
             if d == 0:
                 continue
@@ -485,9 +793,62 @@ class MetaStrategy(BaseStrategy):
             return PositionSide.NONE
         return PositionSide.LONG if best_dir > 0 else PositionSide.SHORT
 
+    def _atr_sized_amount(self, price: float) -> float:
+        """复刻回测引擎 use_atr_risk=True 的开仓量（engine.py:379-391）。
+
+        回测公式：仓位 = min( (equity×2%)/(ATR×2.0), equity×max_position_pct×leverage )
+        其中 max_position_pct×leverage = 1.0×1.0 = 1.0（build_engine_config 实际值）。
+        ATR 公式本身通常给出 20%~60% 权益的仓位；1.0 只是极端兜底。
+        实盘调度器没有引擎这一层，直接用 signal.amount 会变成无条件 100% 满仓。
+        MetaStrategy.calculate_atr_position_size 已自动乘 _vol_scale/_bias_scale。
+        """
+        atr = self.get_atr(14)
+        if atr <= 0:
+            logger.warning("ATR 不可用（预热不足），本次开仓退回全仓计算——实盘不应出现，请检查预热")
+            return self.calculate_position_size(self.account_balance, price)
+        amt = self.calculate_atr_position_size(
+            self.account_balance, price, atr,
+            risk_pct=0.02, atr_multiplier=2.0, max_pct=1.0)
+        return min(amt, self.account_balance / price)  # 名义约束（回测约束2，1x）
+
     def calculate_position_size(self, account_balance: float, price: float) -> float:
         position_pct = self.params.get("position_pct", 1.0)
+        # 波动率目标化 + 情绪调节：把基础仓位比例再乘上动态缩放（高波动→降仓；risk_off+做多→减仓）
+        position_pct = position_pct * self._vol_scale * self._bias_scale
         return (account_balance * position_pct) / price
+
+    def calculate_atr_position_size(self, account_balance, price, atr_val,
+                                   risk_pct=0.02, atr_multiplier=2.0, max_pct=0.5) -> float:
+        """覆盖基类：在 ATR 动态仓位基础上叠加波动率目标化缩放 + 情绪调节缩放。
+
+        关键修复：引擎开启 use_atr_risk 时，开仓金额由本方法重算并『丢弃』signal.amount，
+        若不在此乘上 _vol_scale / _bias_scale，波动率目标化/情绪减仓就永远是个空操作。
+        """
+        base_amt = super().calculate_atr_position_size(
+            account_balance, price, atr_val, risk_pct, atr_multiplier, max_pct)
+        return base_amt * self._vol_scale * self._bias_scale
+
+    def _update_vol_scale(self) -> None:
+        """波动率目标化仓位（vol-managed exposure）。
+
+        用近期 20 日滚动日收益 std（已在 _vol_buf 维护）年化，缩放 = 目标波动/已实现波动，
+        并钳制到 [vol_scale_min, 1.0]（只减仓不爆仓、最低保留底仓）。关闭时(self._vol_scale=1)。
+        依据：Moreira & Muir (2017) Volatility-Managed Portfolios；2025 Finance Research Letters
+        加密实证——逆波动加权把夏普 1.12→1.42。
+        """
+        vt = self.params.get("vol_target_ann", None)
+        if vt is None or vt <= 0 or len(self._vol_buf) < 20:
+            self._vol_scale = 1.0
+            return
+        daily_vol = float(self._vol_buf[-1])
+        if daily_vol <= 0 or not (daily_vol == daily_vol):
+            self._vol_scale = 1.0
+            return
+        realized_ann = daily_vol * math.sqrt(365.0)
+        self._realized_vol_ann = realized_ann
+        scale = vt / realized_ann
+        scale = min(1.0, max(self.params.get("vol_scale_min", 0.3), scale))
+        self._vol_scale = scale
 
     def describe(self) -> str:
         d = super().describe()
