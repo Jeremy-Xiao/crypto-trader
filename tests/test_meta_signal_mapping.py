@@ -176,3 +176,32 @@ def test_allow_short_true_still_allows_short():
         == PositionSide.SHORT
     assert s._map_target(PositionSide.SHORT, PositionSide.NONE, 100.0, "t").signal_type \
         == SignalType.OPEN_SHORT
+
+
+# ============ 默认配置守卫 ============
+
+def test_default_riskoff_long_mode_is_flatten():
+    """默认 riskoff_long_mode 必须是 flatten（实盘 orchestrator 不显式传该参数）。
+
+    变更史：2026-08-23 基于「A方案实证更优」改为 half；2026-09-28 修复空翻多 bug 后
+    重跑同一实验，half/hold 优势消失、flatten 风险调整最优，改回 flatten。
+    详见 STRATEGIES.md 第 34 章。此测试防止被误改回。
+    """
+    s = MetaStrategy(instId="BTC-USDT", mode="adaptive", params=dict(min_adx=0.0))
+    assert s.params["riskoff_long_mode"] == "flatten", (
+        "默认 riskoff_long_mode 被改动——若是有意为之，请同步更新 STRATEGIES 第34章与本测试")
+
+
+def test_riskoff_flatten_clears_long_target():
+    """flatten 语义：risk_off 时把多头目标压成 NONE（清仓）"""
+    s = make_meta(riskoff_long_mode="flatten")
+    assert s._apply_market_filter(PositionSide.LONG, PositionSide.LONG, "risk_off") \
+        == PositionSide.NONE
+
+
+def test_riskoff_half_keeps_long_with_scale():
+    """half 语义：risk_off 时保留多头但按 riskoff_scale 缩放"""
+    s = make_meta(riskoff_long_mode="half")
+    assert s._apply_market_filter(PositionSide.LONG, PositionSide.LONG, "risk_off") \
+        == PositionSide.LONG
+    assert s._bias_scale == 0.5

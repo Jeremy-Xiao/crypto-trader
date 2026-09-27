@@ -89,11 +89,15 @@ class MetaStrategy(BaseStrategy):
         rebound_lookback: int = 5,      # 回看几日判断「已暴跌」
         rebound_drop: float = -0.12,    # 累计跌幅 <= 此值（如5日跌超12%）才判定「跌够了」
         rebound_recent_up: bool = True, # 要求最近1根收涨（止跌）才回补，避免接下跌中继的刀
-        # —— 减弱 risk_off 对做多的压制（针对『跑输躺平』主病灶：高位清仓踏空主升浪）——
-        # risk_off = 人群贪婪/高位。原逻辑一刀切把 LONG 压成 NONE（清仓）。
-        # 但币圈动量强，高位之后常更高，清仓=在主升浪最猛时下车、踏空整段。
-        # 改为：'flatten'=原行为(清仓) / 'hold'=保留多头不缩放 / 'half'=减仓至 riskoff_scale。
-        riskoff_long_mode: str = "half",     # 2026-08-23 起默认减半：A方案实证比 flatten(清仓) 收益/回撤/夏普全面更优
+        # —— risk_off（人群贪婪/高位）时的多头处置 ——
+        # 'flatten'=清仓（原行为） / 'hold'=保留多头不缩放 / 'half'=减仓至 riskoff_scale。
+        # 变更史：
+        #   2026-08-23 因「A方案实证：half 比 flatten 收益/回撤/夏普全面更优」默认改为 half。
+        #   2026-09-28 修复元策略「空翻多」信号 bug（见 STRATEGIES 第34章）后重跑同一实验，
+        #              half/hold 的优势消失（+26.87% / +27.13% vs flatten +26.26%），
+        #              且 flatten 风险调整最优（回撤 -14.78%、夏普 0.80）→ **默认改回 flatten**。
+        #              注：当初的 +36.1% 是 bug 产物（risk_off 时该执行的「翻多」实际没发生）。
+        riskoff_long_mode: str = "flatten",
         riskoff_scale: float = 0.5,     # 'half' 模式下的仓位比例（0.5=减半）
         # risk_on = 人群恐惧。第25章熊市复核发现：熊市利润主要来自做空，而压空恰在
         # 最该做空时自废武功（no_filter 熊市双优的原因）。对称处理：

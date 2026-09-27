@@ -2228,3 +2228,34 @@ swap 模式回归（默认行为不变）、费率回落逻辑。**全量测试 
 ### 35.8 一句话总结
 
 **现货杠杆模型已按 OKX 官方规则实现并通过 20 项测试，回测上确实比永续省 97% 成本、夏普高 0.10；但模拟盘 SOL 借不到币，优势缩水到 +1.63pp，且执行器要重写、策略刚被第 34 章的 bug 打掉 9.2pp——先修实盘、重建基线，再谈换工具。**
+
+---
+
+## 36. 配置变更：`riskoff_long_mode` 改回 `flatten`（2026-09-28）
+
+**变更**：`src/strategies/meta.py` 的默认值 `riskoff_long_mode`：`"half"` → **`"flatten"`**。
+
+**依据**（第 34 章）：修复「空翻多」信号 bug 后重跑第 23 章同一实验：
+
+| 模式 | 修复前（带 bug） | 修复后 | 回撤（修复后） | 夏普（修复后） |
+|---|---|---|---|---|
+| **flatten（新默认）** | +25.5% | **+26.26%** | **-14.78%** | **0.80** |
+| half（旧默认） | +36.1% | +26.87% | -16.02% | 0.78 |
+| hold | +37.9% | +27.13% | -16.53% | 0.73 |
+
+三模式收益差距从 12.4pp 缩到 1.6pp，`flatten` 风险调整最优（回撤最小、夏普最高），
+故改回 `flatten`。原「half 全面更优」的结论建立在 bug 之上，已作废。
+
+**生效范围**：
+- 实盘：`orchestrator` 不显式传该参数 → 走默认值，**已重启生效**（PID 43492，07:08）。
+- 回测脚本：多数脚本显式传 `riskoff_long_mode`，**不受影响**；如需对齐新默认需各自更新。
+  - 已知显式传 `half` 的脚本：`meta_riskoff.py`、`meta_1h_diagnosis.py`、`meta_sym_half.py`
+    （这些是有意做对照实验的，**保持不变**）。
+  - `review_spot_margin_backtest.py` / `review_leverage_plan.py` / `review_funding_impact.py`
+    通过 `MODE = 'half'` 常量传参，与第23章基准对齐用，**后续重建基线时统一改为 `flatten`**。
+
+**守卫**：新增 `tests/test_meta_signal_mapping.py::test_default_riskoff_long_mode_is_flatten`，
+防止默认值被无意改回；并补 `flatten` / `half` 语义的单元断言。
+
+**注意**：该参数只在**情绪为 risk_off（人群贪婪/高位）**时才起作用。当前实盘 bias=neutral，
+故重启后行为暂无明显变化，需等下一次 risk_off 才能观察到差异。
