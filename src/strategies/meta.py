@@ -607,6 +607,9 @@ class MetaStrategy(BaseStrategy):
         # 2.55) 暴跌后回补：恐慌区 + 已暴跌 + 止跌 → 主动加多，吃反弹
         target = self._maybe_rebound(target, bias)
 
+        # 2.58) 仅做多模式（allow_short=False）
+        target = self._apply_allow_short(target, current)
+
         # 2.6) 波动率目标化仓位缩放（vol-managed exposure）
         self._update_vol_scale()
 
@@ -660,6 +663,18 @@ class MetaStrategy(BaseStrategy):
             if b is not None and not (isinstance(b, str) and b.strip() == ""):
                 return self._parse_bias(b)
         return self.market_bias
+
+    def _apply_allow_short(self, target, current):
+        """仅做多模式（allow_short=False）的方向拦截。
+
+        此前该开关只在个别专家内部生效，元决策层没有拦截，
+        导致「仅做多」对照回测实际上仍在做空、结论失真（2026-09-28 修复）。
+
+        语义：不建立空头；若已持空则平掉；若持多则维持不动。
+        """
+        if self.allow_short or target != PositionSide.SHORT:
+            return target
+        return current if current == PositionSide.LONG else PositionSide.NONE
 
     def _apply_market_filter(self, target, current, bias):
         """反向校准护栏（呼应『情绪用来校准风险，不是精准择时』）：
@@ -742,7 +757,11 @@ class MetaStrategy(BaseStrategy):
                 signal.amount = self._atr_sized_amount(price)
                 signal.reason = "元策略: 共识做多"
             elif current == PositionSide.SHORT:
-                signal.signal_type = SignalType.OPEN_SHORT  # 引擎自动翻转
+                # 平空开多。必须发 OPEN_LONG：引擎对「信号方向 == 当前持仓方向」的
+                # 处理是「已持有同向 → 忽略」，若这里误发 OPEN_SHORT，target 会被解析成
+                # SHORT 并命中忽略分支，导致**空翻多永远不执行**。
+                # （2026-09-28 修复：此前误发 OPEN_SHORT，回测与实盘的空翻多全部被吞掉。）
+                signal.signal_type = SignalType.OPEN_LONG
                 signal.amount = self._atr_sized_amount(price)
                 signal.reason = "元策略: 翻转做多"
         elif target == PositionSide.SHORT:

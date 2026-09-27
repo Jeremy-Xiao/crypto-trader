@@ -40,6 +40,19 @@ class BacktestConfig:
     funding_series: Optional[list] = None    # 逐 bar 费率序列（长度=bar 数，每元素=该 bar 内累计费率）；给定则优先于常数
     funding_settlements_per_bar: float = 3.0  # 每根 bar 的结算次数（日线 24h/8h=3；小时线用 1/3）
 
+    # ===== 现货杠杆（OKX 单币种保证金模式 / 币币杠杆）=====
+    # "swap"        = 原有合约语义：维持保证金率 0.5% + 提前强平缓冲（默认，行为不变）
+    # "spot_margin" = OKX 币币杠杆语义，强平价按官方公式：
+    #                 多仓 强平价 = (负债+利息) × (1+档位MMR) × (1+吃单费率) / 仓位资产
+    #                 空仓 强平价 = 仓位资产 / [(负债+利息) × (1+档位MMR) × (1+吃单费率)]
+    #                 触发条件：维持保证金率 ≤ 100%
+    #   借入语义与合约不同：做多时「自有资金先花，不够才借 USDT」；做空时「必须全额借币」
+    #   → 做多若 notional ≤ 权益则负债为 0，**无强平风险也无利息**（纯现货持有）。
+    margin_mode: str = "swap"
+    spot_margin_mmr: float = 0.02        # 仓位档位维持保证金率（tier1；BTC/ETH/SOL 实测均为 2%）
+    spot_margin_fee: float = 0.001       # 吃单费率，用于强平价公式
+    spot_borrow_rate_base_daily: float = -1.0  # 借「交易货币(币)」的日利率（做空用）；<0 表示回落到 borrow_rate_daily
+
     # ATR 动态风控参数
     use_atr_risk: bool = True            # 启用 ATR 动态风控
     atr_period: int = 14                 # ATR 计算周期
@@ -113,6 +126,14 @@ class BacktestEngine:
         self.total_borrow_cost = 0.0    # 累计借币利息
         self.total_funding_cost = 0.0   # 累计资金费率（正=净支出，负=净收入）
         self._bar_i = 0                 # 当前 bar 序号（供 funding_series 对齐）
+
+        # 现货杠杆（margin_mode="spot_margin"）专用状态
+        self.spot_liab_qty = 0.0         # 负债数量（做多=USDT；做空=交易货币数量）
+        self.spot_liab_is_base = False   # True=负债是交易货币（做空）
+        self.spot_asset_qty = 0.0        # 仓位资产（做多=持币数量；做空=账户 USDT 金额）
+        self.spot_interest_qty = 0.0     # 累计未还利息（与负债同单位）
+        self.spot_borrowed_notional = 0.0  # 开仓时借入的名义价值（USDT 计价）
+        self.spot_interest_paid = 0.0    # 累计已付利息（USDT 计价，与 total_borrow_cost 同源）
         self.peak_equity = self.config.initial_balance
         self.max_gross_leverage = 0.0   # 实际用到的最大名义杠杆（名义价值/权益）
         self.regime_history: List[str] = []
@@ -465,11 +486,17 @@ class BacktestEngine:
             if adx_now < self.config.min_adx_for_entry:
                 self.adx_blocked += 1
                 return
+        # 现货杠杆需要「开仓前权益」判断做多是否要借 USDT（自有先花、不够才借）
+        equity_before = self._current_equity(price)
         if side == PositionSide.LONG:
             self._execute_buy(price, amount, timestamp, reason)
         else:
             self._execute_open_short(price, amount, timestamp, reason)
         self.position_side = side
+        if self.config.margin_mode == "spot_margin" and self.position_amount > 0:
+            self._setup_spot_margin_position(
+                side, self.position_price,
+                self.position_amount * self.position_price, equity_before)
 
     def _execute_open_short(self, price: float, amount: float, timestamp: str, reason: str):
         """
@@ -547,6 +574,7 @@ class BacktestEngine:
         elif self.position_side == PositionSide.SHORT:
             self._execute_buy_to_cover(price, timestamp, reason)
         self.position_side = PositionSide.NONE
+        self._clear_spot_margin_position()
 
     def _execute_sell(self, price: float, timestamp: str, reason: str):
         """执行卖出平多（保证金释放 + 盈亏结算）"""
@@ -611,8 +639,15 @@ class BacktestEngine:
         计提借币利息：只对「借入部分」计息 = notional × (1 - 1/L) × 日利率
 
         杠杆1倍时借入为0，成本自然为0，保证 1x 结果与无杠杆口径可比。
+        现货杠杆模式下改用实际借入量（见 _accrue_spot_margin_interest）——
+        做多时「自有资金先花、不够才借」，做空时「全额借币」，与合约口径不同。
         """
-        if self.position_side == PositionSide.NONE or self.leverage <= 1.0:
+        if self.position_side == PositionSide.NONE:
+            return
+        if self.config.margin_mode == "spot_margin":
+            self._accrue_spot_margin_interest(price)
+            return
+        if self.leverage <= 1.0:
             return
         notional = self.position_amount * price
         borrowed = notional * (1.0 - 1.0 / self.leverage)
@@ -620,6 +655,89 @@ class BacktestEngine:
         if cost > 0:
             self.balance -= cost
             self.total_borrow_cost += cost
+
+    # ---------- 现货杠杆（OKX 单币种保证金模式） ----------
+
+    def _spot_base_borrow_rate(self) -> float:
+        """借「交易货币(币)」的日利率；配置为负时回落到通用 borrow_rate_daily。"""
+        r = self.config.spot_borrow_rate_base_daily
+        return self.config.borrow_rate_daily if r < 0 else r
+
+    def _accrue_spot_margin_interest(self, price: float):
+        """
+        现货杠杆逐 bar 计息（按实际负债）。
+
+        - 做空：负债是**币**，按币的日利率计息，利息也是币 → 折算 USDT 后从余额扣除，
+          同时累加到 spot_interest_qty（币），因为它会推高强平价。
+        - 做多：负债是 **USDT**（仅当 notional > 权益时才有），按 USDT 日利率计息。
+        """
+        if self.spot_liab_qty <= 0:
+            return
+        if self.spot_liab_is_base:
+            rate = self._spot_base_borrow_rate()
+            add_qty = self.spot_liab_qty * rate          # 币
+            cost_usdt = add_qty * price
+        else:
+            rate = self.config.borrow_rate_daily
+            add_qty = self.spot_liab_qty * rate          # USDT
+            cost_usdt = add_qty
+        if cost_usdt <= 0:
+            return
+        self.balance -= cost_usdt
+        self.total_borrow_cost += cost_usdt
+        self.spot_interest_paid += cost_usdt
+        self.spot_interest_qty += add_qty
+
+    def _spot_margin_liq_price(self) -> Optional[float]:
+        """
+        现货杠杆强平价（OKX 单币种保证金模式，维持保证金率 = 100% 时触发）。
+
+        官方公式（OKX 帮助中心「怎么计算杠杆强制平仓价格」）：
+          多仓 强平价 = (负债 + 利息) × (1 + 档位MMR) × (1 + 吃单费率) / 仓位资产
+          空仓 强平价 = 仓位资产 / [(负债 + 利息) × (1 + 档位MMR) × (1 + 吃单费率)]
+
+        注意方向语义：返回的价格是「跌破/涨破即强平」的界限，由调用方按持仓方向判定。
+        """
+        f = (1.0 + self.config.spot_margin_mmr) * (1.0 + self.config.spot_margin_fee)
+        if self.position_side == PositionSide.LONG:
+            liab = self.spot_liab_qty + self.spot_interest_qty     # USDT
+            if liab <= 0 or self.spot_asset_qty <= 0:
+                return None            # 无负债 = 纯现货持有，不存在强平
+            return liab * f / self.spot_asset_qty
+        if self.position_side == PositionSide.SHORT:
+            liab = self.spot_liab_qty + self.spot_interest_qty     # 币
+            if liab <= 0 or self.spot_asset_qty <= 0:
+                return None
+            return self.spot_asset_qty / (liab * f)
+        return None
+
+    def _setup_spot_margin_position(self, side: PositionSide, price: float,
+                                    notional: float, equity_before: float) -> None:
+        """开仓时登记现货杠杆的负债/资产结构（供计息与强平价使用）。
+
+        显式接收 side，避免依赖 self.position_side 的赋值时序（隐式依赖易出错）。
+        """
+        if side == PositionSide.LONG:
+            # 做多：自有资金先花，不够才借 USDT
+            borrowed = max(0.0, notional - equity_before)
+            self.spot_liab_qty = borrowed                       # USDT
+            self.spot_liab_is_base = False
+            self.spot_asset_qty = notional / price               # 持币数量
+        else:
+            # 做空：手里没有币，必须全额借币卖出
+            borrowed = notional
+            self.spot_liab_qty = borrowed / price                # 币
+            self.spot_liab_is_base = True
+            self.spot_asset_qty = equity_before + notional       # 账户 USDT（抵押 + 卖出所得）
+        self.spot_borrowed_notional = borrowed
+        self.spot_interest_qty = 0.0
+
+    def _clear_spot_margin_position(self) -> None:
+        self.spot_liab_qty = 0.0
+        self.spot_liab_is_base = False
+        self.spot_asset_qty = 0.0
+        self.spot_interest_qty = 0.0
+        self.spot_borrowed_notional = 0.0
 
     def _funding_rate_for_bar(self) -> float:
         """取当前 bar 应计提的资金费率（已含该 bar 内的全部结算次数）。"""
@@ -692,13 +810,18 @@ class BacktestEngine:
         """
         if self.position_side == PositionSide.NONE:
             return False
-        # 现货多头（1倍）无借贷，不可能被强平；空头即使1倍也借了币，亏损无上限，仍需检查
-        if self.position_side == PositionSide.LONG and self.leverage <= 1.0:
-            return False
         if self.position_amount <= 0:
             return False
 
-        liq_price = self._liquidation_price()
+        if self.config.margin_mode == "spot_margin":
+            liq_price = self._spot_margin_liq_price()
+            if liq_price is None:
+                return False        # 无负债（做多且 notional ≤ 权益）→ 纯现货持有，不会被强平
+        else:
+            # 现货多头（1倍）无借贷，不可能被强平；空头即使1倍也借了币，亏损无上限，仍需检查
+            if self.position_side == PositionSide.LONG and self.leverage <= 1.0:
+                return False
+            liq_price = self._liquidation_price()
 
         if self.position_side == PositionSide.LONG:
             if low > liq_price:
@@ -802,6 +925,8 @@ class BacktestEngine:
             "liquidations": self.liquidations,
             "borrow_cost": self.total_borrow_cost,
             "funding_cost": self.total_funding_cost,
+            "margin_mode": self.config.margin_mode,
+            "spot_interest_paid": self.spot_interest_paid,
             "max_gross_leverage": self.max_gross_leverage,
             "dd_halt_blocked": self.dd_halt_blocked,
             "margin_blocked": self.margin_blocked,
