@@ -40,7 +40,7 @@ ENGINE_COMMON = dict(
     max_position_pct=1.0,
 )
 SYMBOLS = ['BTC-USDT', 'ETH-USDT', 'SOL-USDT']
-MODE = 'half'
+MODE = 'flatten'      # 2026-09-28 起为新默认（第34章 bug 修复后重估，见第36章）
 
 # OKX 现货杠杆借币日利率（基础档）
 OKX_DAILY_BORROW = {
