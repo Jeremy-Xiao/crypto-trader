@@ -32,6 +32,14 @@ class BacktestConfig:
     risk_scales_with_leverage: bool = False  # False=杠杆只放开资金约束、不放大单笔风险（推荐）
     max_drawdown_halt: float = 0.0       # 回撤熔断：权益自峰值回撤超过此比例时禁止新开仓（0=关闭）
 
+    # ===== 永续资金费率（funding）=====
+    # 实盘跑的是 USDT 永续 1x 全仓，每 8 小时结算一次资金费率——这是实盘真实存在、
+    # 而此前回测完全缺失的成本项（引擎原本的「借币利息」在 1x 时为 0，那是现货杠杆口径）。
+    # 计费方向：费率为正 → 多头付钱、空头收钱；费率为负 → 反之。
+    funding_rate_8h: float = 0.0             # 常数模式下每 8 小时费率（正=多头付空头），0=关闭
+    funding_series: Optional[list] = None    # 逐 bar 费率序列（长度=bar 数，每元素=该 bar 内累计费率）；给定则优先于常数
+    funding_settlements_per_bar: float = 3.0  # 每根 bar 的结算次数（日线 24h/8h=3；小时线用 1/3）
+
     # ATR 动态风控参数
     use_atr_risk: bool = True            # 启用 ATR 动态风控
     atr_period: int = 14                 # ATR 计算周期
@@ -103,6 +111,8 @@ class BacktestEngine:
         self.margin_blocked = 0         # 保证金不足导致无法开仓次数
         self.liquidations = 0           # 强平次数
         self.total_borrow_cost = 0.0    # 累计借币利息
+        self.total_funding_cost = 0.0   # 累计资金费率（正=净支出，负=净收入）
+        self._bar_i = 0                 # 当前 bar 序号（供 funding_series 对齐）
         self.peak_equity = self.config.initial_balance
         self.max_gross_leverage = 0.0   # 实际用到的最大名义杠杆（名义价值/权益）
         self.regime_history: List[str] = []
@@ -158,7 +168,7 @@ class BacktestEngine:
               f"MTF确认: {'开启' if self.config.use_mtf else '关闭'} | "
               f"杠杆: {self.leverage}x")
 
-        for idx, row in self.data.iterrows():
+        for self._bar_i, (idx, row) in enumerate(self.data.iterrows()):
             timestamp = row.get("timestamp", row.get("ts", ""))
             price = float(row["close"])
             high = float(row.get("high", price))
@@ -172,6 +182,8 @@ class BacktestEngine:
 
             # 杠杆持仓：每根K线计提借币利息
             self._accrue_borrow_cost(price)
+            # 永续持仓：每根K线计提资金费率（实盘成本，此前完全缺失）
+            self._accrue_funding_cost(price)
             # 策略的仓位计算基准用「权益」而非「空闲现金」（保证金模式下现金会被占用）
             self.strategy.account_balance = self._current_equity(price)
 
@@ -281,6 +293,10 @@ class BacktestEngine:
             print(f"杠杆: {self.leverage}x | 实际最大名义杠杆: {self.max_gross_leverage:.2f}x | "
                   f"强平: {self.liquidations}次 | 借币利息: {self.total_borrow_cost:.2f} | "
                   f"回撤熔断拦截: {self.dd_halt_blocked}次")
+
+        if self.total_funding_cost != 0.0:
+            _tag = "净支出" if self.total_funding_cost > 0 else "净收入"
+            print(f"资金费率(funding)累计: {self.total_funding_cost:+.2f}（{_tag}）")
 
         return results
 
@@ -605,6 +621,41 @@ class BacktestEngine:
             self.balance -= cost
             self.total_borrow_cost += cost
 
+    def _funding_rate_for_bar(self) -> float:
+        """取当前 bar 应计提的资金费率（已含该 bar 内的全部结算次数）。"""
+        series = self.config.funding_series
+        if series is not None:
+            if 0 <= self._bar_i < len(series):
+                v = series[self._bar_i]
+                # 历史数据缺口用 0 兜底，不让 NaN 污染权益
+                return float(v) if v == v else 0.0
+            return 0.0
+        return float(self.config.funding_rate_8h) * float(
+            self.config.funding_settlements_per_bar)
+
+    def _accrue_funding_cost(self, price: float):
+        """
+        计提永续资金费率（funding）。
+
+        与 _accrue_borrow_cost 的区别：借币利息只对「借入部分」计息（1x 时为 0，
+        属现货杠杆口径）；资金费率则对**全部名义持仓**计费，与杠杆倍数无关——
+        实盘跑 1x 永续，成本正是这一项。
+
+        方向：费率为正 → 多头付费、空头收费；费率为负 → 反之。
+        因此偏空策略在负费率环境下是**净收入**（total_funding_cost 为负）。
+        """
+        if self.position_side == PositionSide.NONE:
+            return
+        rate = self._funding_rate_for_bar()
+        if rate == 0.0 or self.position_amount <= 0:
+            return
+        notional = self.position_amount * price
+        # 多头：rate>0 时支出（正成本）；空头方向取反
+        sign = 1.0 if self.position_side == PositionSide.LONG else -1.0
+        cost = notional * rate * sign
+        self.balance -= cost
+        self.total_funding_cost += cost
+
     def _liquidation_price(self) -> float:
         """
         解出精确的强平价：权益恰好等于触发线时的价格。
@@ -750,6 +801,7 @@ class BacktestEngine:
             "leverage": self.leverage,
             "liquidations": self.liquidations,
             "borrow_cost": self.total_borrow_cost,
+            "funding_cost": self.total_funding_cost,
             "max_gross_leverage": self.max_gross_leverage,
             "dd_halt_blocked": self.dd_halt_blocked,
             "margin_blocked": self.margin_blocked,
